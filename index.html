@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Paws & Panic — Escape the Cat</title>
+  <meta name="description" content="Frantic button-masher: click to outrun a creeping cat. Test your AGS integration with login, matchmaking, and real-time sync." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN: MAIN MENU
+       ═══════════════════════════════════════════════════════════════ -->
+  <div id="screen-menu" class="screen active">
+    <div class="menu-bg" aria-hidden="true">
+      <span class="paw paw-1">🐾</span>
+      <span class="paw paw-2">🐾</span>
+      <span class="paw paw-3">🐾</span>
+    </div>
+    <div class="menu-card">
+      <h1 class="game-title">Paws <span class="title-amp">&amp;</span> Panic</h1>
+      <p class="game-tagline">🐈 Click like your life depends on it — because it does. 🏃</p>
+
+      <div class="menu-section">
+        <button id="btn-login" class="btn btn-primary btn-lg">🔑 Login with AGS</button>
+        <p id="menu-login-status" class="status-msg" aria-live="polite"></p>
+      </div>
+
+      <div class="menu-section">
+        <h2 class="section-label">Single Player</h2>
+        <p class="section-hint">Outrun the cat before time runs out</p>
+        <div class="btn-row">
+          <button class="btn btn-accent" id="btn-sp-30">⚡ 30s</button>
+          <button class="btn btn-accent" id="btn-sp-60">🔥 60s</button>
+        </div>
+      </div>
+
+      <div class="menu-section">
+        <h2 class="section-label">Multiplayer Matchmaking</h2>
+        <p class="section-hint">Race another player in real-time</p>
+        <div class="btn-row">
+          <button class="btn btn-match" id="btn-mp-30">⚡ 30s</button>
+          <button class="btn btn-match" id="btn-mp-60">🔥 60s</button>
+        </div>
+      </div>
+
+      <p class="menu-note">AGS placeholders: <code>agsLogin()</code> · <code>agsFindMatch()</code> · <code>agsSendPosition()</code> · <code>agsOnReceiveOpponentPosition()</code></p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN: MATCHMAKING
+       ═══════════════════════════════════════════════════════════════ -->
+  <div id="screen-matchmaking" class="screen">
+    <div class="mm-card">
+      <div class="loader" aria-label="Searching"></div>
+      <h2>Searching for opponent…</h2>
+      <p class="mm-sub">Looking for a fellow runner 🏃‍♂️</p>
+      <button class="btn btn-ghost" id="btn-mm-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN: GAME
+       ═══════════════════════════════════════════════════════════════ -->
+  <div id="screen-game" class="screen">
+    <!-- HUD -->
+    <div class="game-hud">
+      <div class="hud-left">
+        <span id="hud-mode" class="hud-badge">SP · 30s</span>
+      </div>
+      <div class="hud-center">
+        <span id="hud-timer" class="hud-timer">0:30</span>
+      </div>
+      <div class="hud-right">
+        <button id="btn-pause" class="btn-icon" aria-label="Pause">⏸</button>
+      </div>
+    </div>
+
+    <!-- Distance readouts -->
+    <div class="distance-bar">
+      <span class="dist-chip player-chip">🏃 You: <strong id="dist-player">0</strong>m</span>
+      <span class="dist-chip cat-chip">🐈 Cat: <strong id="dist-cat">0</strong>m</span>
+      <span class="dist-chip opponent-chip" id="dist-opponent-chip" style="display:none">🏃‍♂️ Opp: <strong id="dist-opponent">0</strong>m</span>
+    </div>
+
+    <!-- Track -->
+    <div class="track" id="track">
+      <div class="track-marks" aria-hidden="true"></div>
+      <div class="track-lane lane-cat" id="lane-cat">
+        <span class="char-label">🐈</span>
+        <div class="char-wrap" id="wrap-cat"><span class="char-icon" id="char-cat">🐈</span></div>
+      </div>
+      <div class="track-lane lane-player" id="lane-player">
+        <span class="char-label">🏃 You</span>
+        <div class="char-wrap" id="wrap-player"><span class="char-icon" id="char-player">🏃</span></div>
+      </div>
+      <div class="track-lane lane-opponent" id="lane-opponent" style="display:none">
+        <span class="char-label">🏃‍♂️ Opp</span>
+        <div class="char-wrap" id="wrap-opponent"><span class="char-icon" id="char-opponent">🏃‍♂️</span></div>
+      </div>
+      <div class="track-finish" aria-hidden="true">🏁</div>
+    </div>
+
+    <!-- RUN button -->
+    <div class="run-area">
+      <button id="btn-run" class="btn btn-run">🏃 RUN!</button>
+      <p class="run-hint">Tap as fast as you can to sprint forward!</p>
+    </div>
+
+    <!-- Pause overlay -->
+    <div id="pause-overlay" class="overlay" style="display:none">
+      <div class="overlay-card">
+        <h2>⏸ Paused</h2>
+        <button class="btn btn-primary" id="btn-resume">▶ Resume</button>
+        <button class="btn btn-ghost" id="btn-quit-pause">Quit to Menu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN: RESULT
+       ═══════════════════════════════════════════════════════════════ -->
+  <div id="screen-result" class="screen">
+    <div class="result-card" id="result-card">
+      <div id="result-emoji" class="result-emoji">🎉</div>
+      <h2 id="result-title">Result</h2>
+      <div id="result-body" class="result-body"></div>
+      <button class="btn btn-primary btn-lg" id="btn-back-menu">Back to Menu</button>
+    </div>
+  </div>
+
+  <!-- Game engine (defines window.ags* placeholders) -->
+  <script type="module" src="/app.js"></script>
+  <!-- Real AGS integration (overrides the placeholders; no-op until .env is set) -->
+  <script type="module" src="/ags.js"></script>
+</body>
+</html>

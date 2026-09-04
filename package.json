@@ -1,0 +1,22 @@
+{
+  "name": "paws-and-panic",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AGS infrastructure test game — frantic button-masher to test login, matchmaking, and real-time sync.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  },
+  "dependencies": {
+    "@accelbyte/sdk": "^4.3.3",
+    "@accelbyte/sdk-iam": "^6.3.6",
+    "@accelbyte/sdk-lobby": "^5.2.8",
+    "@accelbyte/sdk-matchmaking": "^5.3.6",
+    "@accelbyte/sdk-session": "^5.3.6"
+  }
+}
