@@ -196,6 +196,17 @@ function handleLobbyMessage(msg) {
                     'members:', (data.Members || []).map(m => m.ID).join(', '));
         // sessionId already set from OnMatchFound; this is a confirmation
         if (!ags.currentSession) ags.currentSession = data.SessionID;
+
+        // Fallback: if OnMatchFound wasn't received, extract opponent from Members here
+        if (!ags.opponentUserId && data.Members) {
+          const myId = ags.userInfo?.userId;
+          ags.opponentUserId = data.Members.find(m => m.ID !== myId)?.ID || null;
+        }
+
+        // Start the game if not already started
+        if (typeof window._ppStartGame === 'function') {
+          window._ppStartGame('multi', ags.pendingDuration || 30);
+        }
       } catch (e) {
         console.warn('[AGS] messageSessionNotif parse error:', e);
       }
