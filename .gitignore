@@ -8,6 +8,7 @@ performance-budget.json
 # Env / secrets — never commit real credentials
 .env
 .env.local
+.env.production
 .env.*.local
 .env.test
 
