@@ -24,8 +24,10 @@ jobs:
 
       - name: Configure production service
         run: |
-          echo "VITE_NAMESPACE=abyuditest-pawsandpanic" >> .env.production
-          echo "VITE_BASE_URL=https://dev.accelbyte.io" >> .env.production
+          echo "VITE_AGS_BASE_URL=https://abyuditest-pawsandpanic.prod.gamingservices.accelbyte.io" >> .env.production
+          echo "VITE_AGS_NAMESPACE=abyuditest-pawsandpanic" >> .env.production
+          echo "VITE_AGS_CLIENT_ID=1d2aecca2a234c49b14a664f1b7953fc" >> .env.production
+          echo "VITE_AGS_REDIRECT_URI=https://yudi-ab.github.io/paws-and-panic/" >> .env.production
 
       - name: Audit dependencies
         run: npm audit --audit-level=high
