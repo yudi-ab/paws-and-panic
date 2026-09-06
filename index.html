@@ -20,34 +20,58 @@
       <span class="paw paw-2">🐾</span>
       <span class="paw paw-3">🐾</span>
     </div>
-    <div class="menu-card">
+    <div class="login-card">
       <h1 class="game-title">Paws <span class="title-amp">&amp;</span> Panic</h1>
       <p class="game-tagline">🐈 Click like your life depends on it — because it does. 🏃</p>
 
-      <div class="menu-section">
-        <button id="btn-login" class="btn btn-primary btn-lg">🔑 Login with AGS</button>
+      <!-- ── Login Section (shown when logged out) ──────────────── -->
+      <div id="login-section" class="menu-section">
+        <!-- hidden stubs so app.js DOM lookups don't crash -->
+        <div id="tab-oauth" hidden></div>
+        <div id="tab-guest" hidden></div>
+        <div id="panel-oauth" hidden></div>
+        <div id="panel-guest" hidden></div>
+
+        <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
+          <button id="btn-login-google" class="btn btn-primary btn-lg">🌐 Sign in with Google</button>
+          <div style="text-align:center; opacity:0.5; font-size:13px;">or</div>
+          <button id="btn-login-guest" class="btn btn-accent btn-lg">👤 Play as Guest</button>
+        </div>
         <p id="menu-login-status" class="status-msg" aria-live="polite"></p>
       </div>
 
-      <div class="menu-section">
-        <h2 class="section-label">Single Player</h2>
-        <p class="section-hint">Outrun the cat before time runs out</p>
-        <div class="btn-row">
-          <button class="btn btn-accent" id="btn-sp-30">⚡ 30s</button>
-          <button class="btn btn-accent" id="btn-sp-60">🔥 60s</button>
+      <!-- ── Logged-in badge (shown when logged in) ─────────────── -->
+      <div id="logged-in-badge" class="menu-section logged-in-section" style="display:none;">
+        <div class="logged-in-row">
+          <span class="logged-in-avatar">🏃</span>
+          <span id="logged-in-name" class="logged-in-name">Player</span>
+          <button id="btn-logout" class="btn btn-ghost btn-sm">🚪 Logout</button>
+        </div>
+        <p id="menu-login-status" class="status-msg" aria-live="polite"></p>
+      </div>
+
+      <!-- ── Game modes (shown only when logged in) ────────────── -->
+      <div id="game-modes-section" style="display:none;">
+        <div class="menu-section">
+          <h2 class="section-label">Single Player</h2>
+          <p class="section-hint">Outrun the cat before time runs out</p>
+          <div class="btn-row">
+            <button class="btn btn-accent" id="btn-sp-30">⚡ 30s</button>
+            <button class="btn btn-accent" id="btn-sp-60">🔥 60s</button>
+          </div>
+        </div>
+
+        <div class="menu-section">
+          <h2 class="section-label">Multiplayer Matchmaking</h2>
+          <p class="section-hint">Race another player in real-time</p>
+          <div class="btn-row">
+            <button class="btn btn-match" id="btn-mp-30">⚡ 30s</button>
+            <button class="btn btn-match" id="btn-mp-60">🔥 60s</button>
+          </div>
         </div>
       </div>
 
-      <div class="menu-section">
-        <h2 class="section-label">Multiplayer Matchmaking</h2>
-        <p class="section-hint">Race another player in real-time</p>
-        <div class="btn-row">
-          <button class="btn btn-match" id="btn-mp-30">⚡ 30s</button>
-          <button class="btn btn-match" id="btn-mp-60">🔥 60s</button>
-        </div>
-      </div>
-
-      <p class="menu-note">AGS placeholders: <code>agsLogin()</code> · <code>agsFindMatch()</code> · <code>agsSendPosition()</code> · <code>agsOnReceiveOpponentPosition()</code></p>
+      <p class="menu-note">AGS modules: <code>auth.js</code> · <code>ags.js</code> · <code>app.js</code></p>
     </div>
   </div>
 
@@ -111,6 +135,11 @@
       <p class="run-hint">Tap as fast as you can to sprint forward!</p>
     </div>
 
+    <!-- Pre-game countdown overlay -->
+    <div id="game-countdown" class="overlay" style="display:none">
+      <div class="countdown-number pop" id="countdown-number">3</div>
+    </div>
+
     <!-- Pause overlay -->
     <div id="pause-overlay" class="overlay" style="display:none">
       <div class="overlay-card">
@@ -133,9 +162,9 @@
     </div>
   </div>
 
-  <!-- Game engine (defines window.ags* placeholders) -->
+  <footer id="version-display" style="position:fixed; bottom:8px; right:8px; font-size:10px; opacity:0.3; pointer-events:none;">v0.1.0</footer>
+
+  <!-- Game engine + auth (module imports chain: app.js → auth.js, ags.js) -->
   <script type="module" src="/app.js"></script>
-  <!-- Real AGS integration (overrides the placeholders; no-op until .env is set) -->
-  <script type="module" src="/ags.js"></script>
 </body>
 </html>

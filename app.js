@@ -3,17 +3,39 @@
  * Paws & Panic – AGS Infrastructure Test Game
  * ═══════════════════════════════════════════════════════════════════════
  *
- * AGS SDK PLACEHOLDER FUNCTIONS (replace with real AGS Web SDK calls):
+ * AGS AUTH MODULE (auth.js) provides multiple login methods:
+ *   loginWithOAuthRedirect()    – redirect to AGS hosted login
+ *   loginWithPassword(e, p)     – email + password grant
+ *   loginWithDeviceId()         – guest/headless account
+ *   handleCallback()            – complete OAuth redirect on return
+ *   refreshSession()            – restore a stored session
  *
- *   window.agsLogin()                           – authenticate the player
- *   window.agsFindMatch(duration)               – start matchmaking
- *   window.agsSendPosition(distance)            – send player distance to opponent
- *   window.agsOnReceiveOpponentPosition(distance) – called when opponent distance arrives
- *
- * The placeholders below simulate success so the game is playable standalone.
+ * AGS INTEGRATION (ags.js) handles:
+ *   agsFindMatch(duration)      – start matchmaking
+ *   agsSendPosition(distance)   – send player distance to opponent
+ *   agsOnReceiveOpponentPosition(distance) – callback (below)
  */
 
 'use strict';
+
+import {
+  handleCallback,
+  hasStoredSession,
+  refreshSession,
+  loginWithOAuthRedirect,
+  loginWithPassword,
+  loginWithDeviceId,
+  getProfile,
+  logout as authLogout,
+  loginWithGoogle,
+  exchangeGoogleIdToken,
+  sdk,
+} from './auth.js';
+import { IamUserAuthorizationClient, UsersApi } from '@accelbyte/sdk-iam';
+import { AGS_CONFIG } from './ags-config.js';
+
+
+import { onLoginComplete, onLogoutComplete } from './ags.js';
 
 // ═══════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -44,65 +66,42 @@ const state = {
   opponentDist: 0,
 
   tickTimer:    null,     // setInterval id for physics
-  countdownId:  null,     // setInterval id for 1-second countdown
+  countdownId:     null,     // setInterval id for 1-second countdown
+  preCountdownId:  null,     // setTimeout chain id for 3-2-1 pre-game
+  finishLine:      1,        // fixed distance scale for track rendering
   lastClick:    0,        // Date.now() of last registered click
 
   // AGS auth
   loggedIn:     false,
   username:     null,
+  playerCaught: false,
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// AGS SDK PLACEHOLDERS
+// AGS PLACEHOLDER (only for fallback when ags.js guard is inactive)
 // ═══════════════════════════════════════════════════════════════════════
-
-/**
- * Login placeholder – simulates a successful login after a short delay.
- * Replace the body of this function with the real AGS Web SDK login call.
- */
-window.agsLogin = function agsLogin() {
-  console.log('[AGS Placeholder] agsLogin() called');
-  setStatus('Signing in…');
-
-  setTimeout(() => {
-    state.loggedIn = true;
-    state.username = 'Runner' + Math.floor(Math.random() * 9000 + 1000);
-    setStatus('Signed in as ' + state.username + ' ✓');
-    dom.btnLogin.textContent = '👤 ' + state.username;
-    dom.btnLogin.disabled = true;
-    console.log('[AGS Placeholder] Login success:', state.username);
-  }, 600);
-};
 
 /**
  * Find-match placeholder – simulates finding an opponent.
- * Replace with real AGS matchmaking call.
- * @param {number} duration – match length in seconds (30 | 60)
- * @returns {string} a fake matchId
+ * Overridden by ags.js when configured.
  */
-window.agsFindMatch = function agsFindMatch(duration) {
+window.agsFindMatch = window.agsFindMatch || function agsFindMatch(duration) {
   const matchId = 'match_' + Math.random().toString(36).slice(2, 11);
   console.log('[AGS Placeholder] agsFindMatch(%d) → %s', duration, matchId);
   return matchId;
 };
 
 /**
- * Send the local player's current distance to the opponent.
- * Replace with real AGS real-time message send.
- * @param {number} distance
+ * Send position placeholder. Overridden by ags.js when configured.
  */
-window.agsSendPosition = function agsSendPosition(distance) {
+window.agsSendPosition = window.agsSendPosition || function agsSendPosition(distance) {
   console.log('[AGS Placeholder] agsSendPosition(%d)', distance);
-  // In a real integration this would send via AGS WebSocket / lobby.
 };
 
 /**
  * Called when the AGS SDK delivers an opponent position update.
- * Wire this as the callback in your AGS message listener.
- * @param {number} distance
  */
 window.agsOnReceiveOpponentPosition = function agsOnReceiveOpponentPosition(distance) {
-  console.log('[AGS Placeholder] agsOnReceiveOpponentPosition(%d)', distance);
   state.opponentDist = distance;
   renderPositions();
 };
@@ -121,9 +120,27 @@ function cacheDom() {
     result:      document.getElementById('screen-result'),
   };
 
-  // Menu
-  dom.btnLogin      = document.getElementById('btn-login');
-  dom.statusMsg     = document.getElementById('menu-login-status');
+  // Menu — login tabs
+  dom.loginSection     = document.getElementById('login-section');
+  dom.loggedInBadge    = document.getElementById('logged-in-badge');
+  dom.gameModesSection = document.getElementById('game-modes-section');
+  dom.loggedInName     = document.getElementById('logged-in-name');
+  dom.btnLogout        = document.getElementById('btn-logout');
+  dom.statusMsg        = document.getElementById('menu-login-status');
+
+  // Tab buttons
+  dom.tabOAuth       = document.getElementById('tab-oauth');
+  // dom.tabPassword removed per requirement
+  dom.tabGuest       = document.getElementById('tab-guest');
+  dom.panelOAuth     = document.getElementById('panel-oauth');
+  // dom.panelPassword removed
+  dom.panelGuest     = document.getElementById('panel-guest');
+
+  // Login form elements
+  dom.btnLoginOAuth  = document.getElementById('btn-login-oauth');
+  dom.btnLoginGoogle = document.getElementById('btn-login-google');
+  // Email/Password elements removed
+  dom.btnLoginGuest  = document.getElementById('btn-login-guest');
 
   // Game HUD
   dom.hudMode       = document.getElementById('hud-mode');
@@ -144,6 +161,8 @@ function cacheDom() {
   // Buttons
   dom.btnRun        = document.getElementById('btn-run');
   dom.pauseOverlay  = document.getElementById('pause-overlay');
+  dom.gameCountdown   = document.getElementById('game-countdown');
+  dom.countdownNumber = document.getElementById('countdown-number');
 
   // Result
   dom.resultEmoji   = document.getElementById('result-emoji');
@@ -166,6 +185,186 @@ function setStatus(msg) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// LOGIN UI — tabs + post-login state
+// ═══════════════════════════════════════════════════════════════════════
+
+// Helper: Generate a fun, unique name and persist it
+function getOrGenerateName(profile) {
+  const rawName = profile?.displayName || profile?.userName;
+  if (rawName && rawName.trim() !== '') return rawName;
+
+  // Reuse already-generated name for this browser
+  const stored = localStorage.getItem('paws_display_name');
+  if (stored) return stored;
+
+  const adjectives = ['Swift', 'Sneaky', 'Hungry', 'Fluffy', 'Zoomy', 'Quiet', 'Playful'];
+  const nouns = ['Paws', 'Runner', 'Cat', 'Sprinter', 'Buddy', 'Whiskers', 'Meow'];
+  const name = `${adjectives[Math.floor(Math.random() * adjectives.length)]}${nouns[Math.floor(Math.random() * nouns.length)]}${Math.floor(Math.random() * 999)}`;
+  localStorage.setItem('paws_display_name', name);
+  return name;
+}
+
+async function updateLoginUI() {
+  if (state.loggedIn) {
+    dom.loginSection.style.display     = 'none';
+    dom.loggedInBadge.style.display    = 'flex';
+    dom.gameModesSection.style.display = 'block';
+
+    // Use cached profile set by completeLogin(); fall back to a fresh fetch
+    const profile = state.profileCache || await getProfile();
+    const displayName = getOrGenerateName(profile);
+
+    dom.loggedInName.textContent = displayName;
+
+    // Add "Edit" button once
+    if (!document.getElementById('edit-name-btn')) {
+      const editBtn = document.createElement('button');
+      editBtn.id = 'edit-name-btn';
+      editBtn.textContent = '✎ Edit Name';
+      editBtn.style.marginLeft = '10px';
+      editBtn.style.padding = '2px 8px';
+      editBtn.style.fontSize = '12px';
+      editBtn.style.cursor = 'pointer';
+      editBtn.onclick = () => {
+        const newName = prompt('Enter new display name:', displayName);
+        if (newName && newName.trim() !== '') {
+          updateDisplayName(newName);
+        }
+      };
+      dom.loggedInBadge.appendChild(editBtn);
+    }
+  } else {
+    dom.loginSection.style.display     = '';
+    dom.loggedInBadge.style.display    = 'none';
+    dom.gameModesSection.style.display = 'none';
+  }
+}
+
+// Update display name on AGS and refresh local state
+async function updateDisplayName(newName) {
+  try {
+    const { baseURL } = AGS_CONFIG;
+    const resp = await fetch(`${baseURL}/iam/v3/public/namespaces/${AGS_CONFIG.namespace}/users/me`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sdk.getToken().accessToken}`,
+      },
+      body: JSON.stringify({ displayName: newName }),
+    });
+
+    if (!resp.ok) {
+      const errorData = await resp.json().catch(() => ({}));
+      throw new Error(errorData.errorMessage || 'Failed to update name');
+    }
+
+    localStorage.setItem('paws_display_name', newName);
+    dom.loggedInName.textContent = newName;
+    const playerLabel = document.querySelector('.lane-player .char-label');
+    if (playerLabel) playerLabel.textContent = `🏃 ${newName}`;
+    console.log('[App] Display name updated to:', newName);
+  } catch (e) {
+    console.error('[App] Failed to update display name:', e);
+    alert('Failed to update name: ' + (e.message || 'Unknown error'));
+  }
+}
+
+function switchTab(tabButton) {
+  // Deselect all tabs
+  [dom.tabOAuth, dom.tabGuest].forEach(t => {
+    t.setAttribute('aria-selected', 'false');
+    t.classList.remove('active');
+  });
+  [dom.panelOAuth, dom.panelGuest].forEach(p => {
+    p.classList.remove('active');
+    p.hidden = true;
+  });
+
+  // Select the clicked tab
+  tabButton.setAttribute('aria-selected', 'true');
+  tabButton.classList.add('active');
+  const panelId = tabButton.getAttribute('aria-controls');
+  const panel   = document.getElementById(panelId);
+  if (panel) {
+    panel.classList.add('active');
+    panel.hidden = false;
+  }
+}
+
+/** After any successful login, fetch profile and update game state. */
+async function completeLogin() {
+  const profile = await getProfile();
+  state.loggedIn     = true;
+  state.profileCache = profile;
+  state.username     = profile?.displayName || profile?.userName || 'Runner';
+  setStatus('Signed in as ' + state.username + ' ✓');
+  updateLoginUI();
+
+  // Notify ags.js to open lobby socket
+  await onLoginComplete({
+    userId:      profile?.userId,
+    displayName: state.username,
+  });
+
+  console.log('[App] Login complete:', state.username);
+}
+
+function setLoginLoading(button, loading) {
+  if (loading) {
+    button.dataset.originalText = button.textContent;
+    button.textContent = '⏳ Signing in…';
+    button.disabled = true;
+  } else {
+    button.textContent = button.dataset.originalText || button.textContent;
+    button.disabled = false;
+  }
+}
+
+// ── OAuth redirect ───────────────────────────────────────────────────
+
+function handleOAuthLogin(platform = null) {
+  setStatus('Redirecting...');
+  const authClient = new IamUserAuthorizationClient(sdk);
+  // Using both login_type and platform to ensure IAM triggers provider-specific flow
+  const options = platform ? { platform, login_type: 'platform' } : {};
+  window.location.href = authClient.createLoginURL(options);
+}
+
+// ── Email / password (REMOVED) ──────────────────────────────────────
+
+
+// ── Guest / device-ID ────────────────────────────────────────────────
+
+async function handleGuestLogin() {
+  setLoginLoading(dom.btnLoginGuest, true);
+  setStatus('Creating guest account…');
+
+  const result = await loginWithDeviceId();
+
+  if (!result.ok) {
+    setLoginLoading(dom.btnLoginGuest, false);
+    setStatus(result.error || 'Guest login failed.');
+    return;
+  }
+
+  await completeLogin();
+  setLoginLoading(dom.btnLoginGuest, false);
+}
+
+// ── Logout ───────────────────────────────────────────────────────────
+
+async function handleLogout() {
+  setStatus('Logging out…');
+  await authLogout();
+  onLogoutComplete();
+
+  state.loggedIn = false;
+  state.username = null;
+  setStatus('Signed out ✓');
+  updateLoginUI();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // GAME LIFECYCLE
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -174,8 +373,10 @@ function startGame(mode, duration) {
   state.duration    = duration;
   state.timeLeft    = duration;
   state.playerDist  = 0;
-  state.catDist     = 0;
+  state.catDist     = -50;  // Cat starts 50 units behind, giving player time to react
   state.opponentDist = 0;
+  state.playerCaught = false; // Reset caught status
+  state.finishLine  = CONFIG.catSpeedPerSec * duration || 1;
   state.running     = true;
   state.paused      = false;
 
@@ -203,6 +404,64 @@ function startGame(mode, duration) {
   state.countdownId = setInterval(countdownTick, 1000);
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// PRE-GAME COUNTDOWN — 3 · 2 · 1 · GO! then hand off to startGame()
+// ═══════════════════════════════════════════════════════════════════════
+
+function startGameCountdown(mode, duration) {
+  // Show game screen so the track is visible during countdown,
+  // but leave state.running = false so clicks/physics are no-ops.
+  state.mode        = mode;
+  state.duration    = duration;
+  state.timeLeft    = duration;
+  state.playerDist  = 0;
+  state.catDist     = -50;
+  state.opponentDist = 0;
+  state.finishLine  = CONFIG.catSpeedPerSec * duration || 1;
+
+  // HUD
+  dom.hudMode.textContent  = (mode === 'single' ? 'SP' : 'MP') + ' · ' + duration + 's';
+  dom.hudTimer.textContent = fmtTime(duration);
+  dom.hudTimer.classList.remove('danger');
+  dom.distPlayer.textContent   = '0';
+  dom.distCat.textContent      = '0';
+  dom.distOpponent.textContent = '0';
+
+  // Opponent lane visibility
+  const showOpp = mode === 'multi';
+  dom.laneOpponent.style.display = showOpp ? 'flex' : 'none';
+  dom.distOppChip.style.display  = showOpp ? 'inline' : 'none';
+
+  renderPositions();
+  showScreen('game');
+
+  // Show countdown overlay
+  const steps = ['3', '2', '1', 'GO!'];
+  let i = 0;
+
+  dom.countdownNumber.textContent = steps[i];
+  dom.countdownNumber.classList.remove('pop');
+  void dom.countdownNumber.offsetWidth; // reflow to restart animation
+  dom.countdownNumber.classList.add('pop');
+  dom.gameCountdown.style.display = 'flex';
+
+  function tick() {
+    i++;
+    if (i < steps.length) {
+      dom.countdownNumber.classList.remove('pop');
+      void dom.countdownNumber.offsetWidth;
+      dom.countdownNumber.textContent = steps[i];
+      dom.countdownNumber.classList.add('pop');
+      state.preCountdownId = setTimeout(tick, i === steps.length - 1 ? 600 : 1000);
+    } else {
+      dom.gameCountdown.style.display = 'none';
+      startGame(mode, duration);
+    }
+  }
+
+  state.preCountdownId = setTimeout(tick, 1000);
+}
+
 function startMatchmaking(mode, duration) {
   if (!state.loggedIn) {
     setStatus('Please log in first!');
@@ -211,14 +470,14 @@ function startMatchmaking(mode, duration) {
 
   showScreen('matchmaking');
   window.agsFindMatch(duration);
-
-  // Simulate finding an opponent after a delay
-  setTimeout(() => {
-    startGame(mode, duration);
-  }, 2200);
+  // Game starts when ags.js receives a matchmakingNotif (status=done) from AGS
+  // and calls window._ppStartGame(mode, duration).
 }
 
 function cancelMatchmaking() {
+  if (typeof window.agsCancelMatch === 'function') {
+    window.agsCancelMatch();
+  }
   showScreen('menu');
   setStatus('Matchmaking cancelled');
 }
@@ -236,7 +495,8 @@ function physicsTick() {
   renderPositions();
 
   // Cat catches player if it reaches them
-  if (state.catDist >= state.playerDist) {
+  if (state.catDist >= state.playerDist && !state.playerCaught) {
+    state.playerCaught = true;
     endGame();
   }
 }
@@ -292,7 +552,8 @@ function quitToMenu() {
   stopTimers();
   state.running = false;
   state.paused = false;
-  dom.pauseOverlay.style.display = 'none';
+  dom.pauseOverlay.style.display  = 'none';
+  dom.gameCountdown.style.display = 'none';
   showScreen('menu');
 }
 
@@ -375,13 +636,14 @@ function renderPositions() {
   const trackW = dom.track.clientWidth;
   const usable = trackW - CONFIG.trackPadding * 2;
 
-  // Determine the farthest distance for scaling (so the leader fills the track)
-  const maxDist = Math.max(state.playerDist, state.catDist, state.opponentDist, 1);
+  // Use a fixed finish-line scale so all characters race left→right on an
+  // absolute axis. Set in startGame/startGameCountdown from catSpeedPerSec * duration.
+  const fl = state.finishLine || 1;
 
   // Position each character
-  positionChar(dom.wrapCat,      state.catDist,      maxDist, usable);
-  positionChar(dom.wrapPlayer,   state.playerDist,   maxDist, usable);
-  positionChar(dom.wrapOpponent, state.opponentDist, maxDist, usable);
+  positionChar(dom.wrapCat,      state.catDist,      fl, usable);
+  positionChar(dom.wrapPlayer,   state.playerDist,   fl, usable);
+  positionChar(dom.wrapOpponent, state.opponentDist, fl, usable);
 
   // Update distance readouts
   dom.distPlayer.textContent  = Math.floor(state.playerDist);
@@ -389,9 +651,10 @@ function renderPositions() {
   dom.distOpponent.textContent = Math.floor(state.opponentDist);
 }
 
-function positionChar(wrapEl, dist, maxDist, usablePx) {
-  const ratio = Math.min(dist / maxDist, 1);
-  const px = CONFIG.trackPadding + ratio * usablePx;
+function positionChar(wrapEl, dist, finishLine, usablePx) {
+  // Clamp between 0 and 1 so negative distances (cat start offset) sit at start rail.
+  const ratio = Math.max(0, Math.min(dist / finishLine, 1));
+  const px    = CONFIG.trackPadding + ratio * usablePx;
   wrapEl.style.left = px + 'px';
 }
 
@@ -408,22 +671,32 @@ function fmtTime(sec) {
 function stopTimers() {
   clearInterval(state.tickTimer);
   clearInterval(state.countdownId);
-  state.tickTimer = null;
-  state.countdownId = null;
+  clearTimeout(state.preCountdownId);
+  state.tickTimer      = null;
+  state.countdownId    = null;
+  state.preCountdownId = null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════════════
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   cacheDom();
 
-  // ── Menu buttons ───────────────────────────────────────────────────
-  dom.btnLogin.addEventListener('click', () => window.agsLogin());
+  // ── Login tab switching ────────────────────────────────────────────
+  dom.tabOAuth.addEventListener('click',    () => switchTab(dom.tabOAuth));
+  dom.tabGuest.addEventListener('click',    () => switchTab(dom.tabGuest));
 
-  document.getElementById('btn-sp-30').addEventListener('click', () => startGame('single', 30));
-  document.getElementById('btn-sp-60').addEventListener('click', () => startGame('single', 60));
+  // ── Login buttons ──────────────────────────────────────────────────
+  dom.btnLoginGoogle.addEventListener('click', () => loginWithGoogle());
+  dom.btnLoginGuest.addEventListener('click', handleGuestLogin);
+  dom.btnLogout.addEventListener('click', handleLogout);
+
+
+  // ── Game mode buttons ──────────────────────────────────────────────
+  document.getElementById('btn-sp-30').addEventListener('click', () => startGameCountdown('single', 30));
+  document.getElementById('btn-sp-60').addEventListener('click', () => startGameCountdown('single', 60));
   document.getElementById('btn-mp-30').addEventListener('click', () => startMatchmaking('multi', 30));
   document.getElementById('btn-mp-60').addEventListener('click', () => startMatchmaking('multi', 60));
 
@@ -431,12 +704,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-mm-cancel').addEventListener('click', cancelMatchmaking);
 
   // ── Game ────────────────────────────────────────────────────────────
-  // The RUN button handles both mouse and touch for rapid tapping.
   dom.btnRun.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     onRunClick();
   });
-  // Fallback for older browsers
   dom.btnRun.addEventListener('touchstart', (e) => {
     e.preventDefault();
     onRunClick();
@@ -458,7 +729,39 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   console.log('[Paws & Panic] Initialized — state available at window._pp');
+
+  // ── Auto-login: handle OAuth callback or restore session ───────────
+  // Handle Google Implicit Flow first
+  const hash = window.location.hash.substring(1);
+  const hashParams = new URLSearchParams(hash);
+  const idToken = hashParams.get('id_token');
+  if (idToken) {
+    const googleResult = await exchangeGoogleIdToken(idToken);
+    if (googleResult?.ok) {
+      window.location.hash = '';
+      window.location.reload();
+    } else {
+      setStatus(googleResult?.error || 'Google sign-in failed — please try again.');
+    }
+  }
+
+  const callbackResult = await handleCallback();
+  if (callbackResult?.ok) {
+    await completeLogin();
+  } else if (hasStoredSession()) {
+    setStatus('Restoring session…');
+    const refreshResult = await refreshSession();
+    if (refreshResult?.ok) {
+      await completeLogin();
+    } else {
+      setStatus('Session expired — please log in again.');
+    }
+  }
 });
 
-// Expose for debugging
-window._pp = state;
+// Expose for debugging and AGS integration
+window._pp           = state;
+window.updateLoginUI = updateLoginUI;
+window.showScreen    = showScreen;
+// ags.js calls this when a match is found via matchmakingNotif
+window._ppStartGame  = startGameCountdown;

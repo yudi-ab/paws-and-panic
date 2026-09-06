@@ -87,17 +87,37 @@ body {
 .btn-lg      { font-size: 1.1rem; padding: .85rem 2rem; }
 
 /* ── Screens ─────────────────────────────────────────────────────────── */
+/* ── Screens ─────────────────────────────────────────────────────────── */
 .screen {
   position: fixed;
   inset: 0;
-  display: none;
+  display: flex !important;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .3s ease;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
   overflow-y: auto;
 }
-.screen.active { display: flex; }
+.screen.active {
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 10;
+}
+
+.login-card {
+  background: var(--c-surface) !important;
+  padding: 2.5rem !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3) !important;
+  width: 100% !important;
+  max-width: 400px !important;
+  text-align: center !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  backdrop-filter: blur(10px) !important;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════
    MENU
@@ -471,4 +491,147 @@ body {
   .btn-run   { font-size: 1.8rem; padding: 1rem; }
   .char-icon { font-size: 28px; }
   .track-lane { height: 46px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LOGIN TABS
+   ═══════════════════════════════════════════════════════════════════════ */
+.login-tabs {
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.tab-bar {
+  display: flex;
+  background: rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0.75rem 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-light);
+  cursor: pointer;
+  transition: all 0.2s;
+  border-bottom: 3px solid transparent;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.tab-btn.active {
+  color: var(--text-dark);
+  border-bottom-color: var(--accent);
+  background: white;
+}
+
+.tab-panel {
+  padding: 1.25rem;
+  text-align: center;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.tab-panel[hidden] {
+  display: none;
+}
+
+.tab-hint {
+  font-size: 0.9rem;
+  color: var(--text-light);
+  margin-bottom: 1rem;
+}
+
+/* Form inputs */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.login-input {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-sm);
+  background: white;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.login-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.3);
+}
+
+/* Logged in state */
+.logged-in-section {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.logged-in-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.logged-in-avatar {
+  font-size: 1.5rem;
+  background: white;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.logged-in-name {
+  font-weight: 700;
+  font-size: 1.1rem;
+  flex: 1;
+  text-align: left;
+}
+
+.btn-sm {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+/* ── Pre-game countdown overlay ─────────────────────────────────────── */
+#game-countdown {
+  background: rgba(0, 0, 0, .55);
+  z-index: 20;
+}
+
+.countdown-number {
+  font-size: 6rem;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 4px 24px rgba(0,0,0,.5);
+  user-select: none;
+}
+
+.countdown-number.pop {
+  animation: countdown-pop .35s ease-out;
+}
+
+@keyframes countdown-pop {
+  0%   { transform: scale(1.6); opacity: 0; }
+  60%  { transform: scale(.95); opacity: 1; }
+  100% { transform: scale(1);   opacity: 1; }
 }
