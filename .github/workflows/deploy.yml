@@ -28,6 +28,8 @@ jobs:
           echo "VITE_AGS_NAMESPACE=abyuditest-pawsandpanic" >> .env.production
           echo "VITE_AGS_CLIENT_ID=1d2aecca2a234c49b14a664f1b7953fc" >> .env.production
           echo "VITE_AGS_REDIRECT_URI=https://yudi-ab.github.io/paws-and-panic/" >> .env.production
+          echo "VITE_AGS_MATCH_POOL_30=paws-panic-30s" >> .env.production
+          echo "VITE_AGS_MATCH_POOL_60=paws-panic-60s" >> .env.production
 
       - name: Audit dependencies
         run: npm audit --audit-level=high
