@@ -299,9 +299,11 @@ export async function refreshSession() {
 export function loginWithGoogle() {
   const nonce = globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : Math.random().toString(36);
   sessionStorage.setItem('ags_google_nonce', nonce);
+  // Use the same redirect URI as AGS OAuth (from VITE_AGS_REDIRECT_URI / current origin).
+  // Hardcoding localhost breaks Google login on GitHub Pages (redirect_uri_mismatch).
   const params = new URLSearchParams({
     client_id: '343511838560-a4i1po9t8neg2gqhboae0i7vllmu5eof.apps.googleusercontent.com',
-    redirect_uri: 'http://localhost:5173',
+    redirect_uri: AGS_CONFIG.redirectURI,
     response_type: 'id_token',
     scope: 'openid email profile',
     nonce,
