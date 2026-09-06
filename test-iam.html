@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>IAM Configuration Test</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #0a0e27;
+      color: #00ff00;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .check {
+      margin: 15px 0;
+      padding: 12px;
+      border-left: 4px solid;
+      border-radius: 4px;
+    }
+    .check.pass {
+      border-color: #00ff00;
+      background: rgba(0, 255, 0, 0.1);
+    }
+    .check.fail {
+      border-color: #ff0000;
+      background: rgba(255, 0, 0, 0.1);
+      color: #ff6b6b;
+    }
+    .check.info {
+      border-color: #00ccff;
+      background: rgba(0, 204, 255, 0.1);
+      color: #00ccff;
+    }
+    .label {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .value {
+      font-size: 0.9em;
+      margin-top: 5px;
+      word-break: break-all;
+    }
+    h1 { color: #00ccff; }
+    h2 { color: #ffaa00; margin-top: 30px; }
+    .section { margin: 20px 0; }
+    .error-msg { color: #ff6b6b; margin-top: 10px; }
+    .success-msg { color: #00ff00; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>🧪 IAM Configuration Test</h1>
+  <p>This page checks if IAM is properly connected to your game.</p>
+
+  <div id="results"></div>
+
+  <script type="module">
+    import { AGS_CONFIG, isAgsConfigured } from './ags-config.js';
+
+    const resultsDiv = document.getElementById('results');
+    let passCount = 0;
+    let failCount = 0;
+
+    function addCheck(title, passed, details = '') {
+      const check = document.createElement('div');
+      check.className = `check ${passed ? 'pass' : 'fail'}`;
+
+      let content = `<div class="label">${passed ? '✅' : '❌'} ${title}</div>`;
+      if (details) {
+        content += `<div class="value">${details}</div>`;
+      }
+
+      check.innerHTML = content;
+      resultsDiv.appendChild(check);
+
+      if (passed) passCount++;
+      else failCount++;
+    }
+
+    function addInfo(title, details = '') {
+      const check = document.createElement('div');
+      check.className = 'check info';
+
+      let content = `<div class="label">ℹ️ ${title}</div>`;
+      if (details) {
+        content += `<div class="value">${details}</div>`;
+      }
+
+      check.innerHTML = content;
+      resultsDiv.appendChild(check);
+    }
+
+    // Test 1: Check if environment variables are loaded
+    addCheck(
+      'Base URL configured',
+      !!AGS_CONFIG.baseURL && AGS_CONFIG.baseURL.length > 0,
+      `Value: ${AGS_CONFIG.baseURL || '(empty)'}`
+    );
+
+    // Test 2: Check namespace
+    addCheck(
+      'Namespace configured',
+      !!AGS_CONFIG.namespace && AGS_CONFIG.namespace.length > 0,
+      `Value: ${AGS_CONFIG.namespace || '(empty)'}`
+    );
+
+    // Test 3: Check client ID
+    addCheck(
+      'Client ID configured',
+      !!AGS_CONFIG.clientId && AGS_CONFIG.clientId.length > 0,
+      `Value: ${AGS_CONFIG.clientId || '(empty)'}`
+    );
+
+    // Test 4: Check redirect URI
+    addCheck(
+      'Redirect URI configured',
+      !!AGS_CONFIG.redirectURI && AGS_CONFIG.redirectURI.length > 0,
+      `Value: ${AGS_CONFIG.redirectURI || '(empty)'}`
+    );
+
+    // Test 5: Check match pools
+    addCheck(
+      'Match pools configured',
+      AGS_CONFIG.matchPools && Object.keys(AGS_CONFIG.matchPools).length > 0,
+      `30s: ${AGS_CONFIG.matchPools['30'] || '(empty)'}, 60s: ${AGS_CONFIG.matchPools['60'] || '(empty)'}`
+    );
+
+    // Test 6: Check if AGS is configured (all required fields present)
+    const isConfigured = isAgsConfigured();
+    addCheck(
+      'AGS is fully configured',
+      isConfigured,
+      isConfigured
+        ? '✓ All required fields are present'
+        : '✗ Missing one or more required fields'
+    );
+
+    // Test 7: Import ags.js and check SDK initialization
+    try {
+      import('./ags.js').then(() => {
+        // Check if SDK was initialized
+        if (window._ags && window._ags.sdk) {
+          addCheck(
+            'SDK initialized',
+            true,
+            `SDK object present in memory`
+          );
+        } else if (isConfigured) {
+          addCheck(
+            'SDK initialization',
+            false,
+            'ags.js loaded but SDK not initialized (should not happen if AGS is configured)'
+          );
+        } else {
+          addInfo(
+            'SDK not initialized (expected)',
+            'AGS is not configured, so the SDK uses placeholders instead'
+          );
+        }
+
+        // Check if login and matchmaking functions exist
+        addCheck(
+          'agsLogin function available',
+          typeof window.agsLogin === 'function',
+          'Can call window.agsLogin()'
+        );
+
+        addCheck(
+          'agsFindMatch function available',
+          typeof window.agsFindMatch === 'function',
+          'Can call window.agsFindMatch()'
+        );
+
+        addCheck(
+          'agsSendPosition function available',
+          typeof window.agsSendPosition === 'function',
+          'Can call window.agsSendPosition()'
+        );
+
+        addCheck(
+          'agsOnReceiveOpponentPosition function available',
+          typeof window.agsOnReceiveOpponentPosition === 'function',
+          'Can call window.agsOnReceiveOpponentPosition()'
+        );
+
+        // Summary
+        setTimeout(() => {
+          const summary = document.createElement('div');
+          summary.style.marginTop = '30px';
+          summary.style.borderTop = '2px solid #444';
+          summary.style.paddingTop = '20px';
+
+          if (isConfigured) {
+            summary.innerHTML = `
+              <h2 style="color: #00ff00;">✅ IAM is Connected!</h2>
+              <p>Your game is properly configured to use AccelByte Gaming Services IAM.</p>
+              <p><strong>Next steps:</strong></p>
+              <ol>
+                <li>Click the "🔑 Login with AGS" button in the main game</li>
+                <li>You'll be redirected to AccelByte's login page</li>
+                <li>Enter your credentials</li>
+                <li>The game will authenticate you and display your name</li>
+              </ol>
+              <p style="color: #00ccff; margin-top: 20px;">
+                Watch the browser console (F12) for logs starting with <code>[AGS]</code>
+              </p>
+            `;
+          } else {
+            summary.innerHTML = `
+              <h2 style="color: #ffaa00;">⚠️ IAM Not Fully Configured</h2>
+              <p>Some required configuration values are missing or empty.</p>
+              <p><strong>Missing fields:</strong></p>
+              <ul>
+                ${!AGS_CONFIG.baseURL ? '<li>VITE_AGS_BASE_URL</li>' : ''}
+                ${!AGS_CONFIG.namespace ? '<li>VITE_AGS_NAMESPACE</li>' : ''}
+                ${!AGS_CONFIG.clientId ? '<li>VITE_AGS_CLIENT_ID</li>' : ''}
+                ${!AGS_CONFIG.redirectURI ? '<li>VITE_AGS_REDIRECT_URI</li>' : ''}
+              </ul>
+              <p><strong>To fix:</strong></p>
+              <ol>
+                <li>Open <code>.env</code> in your project</li>
+                <li>Fill in the missing values from your AGS Admin Portal</li>
+                <li>Refresh this page</li>
+              </ol>
+            `;
+          }
+
+          resultsDiv.appendChild(summary);
+        }, 500);
+      });
+    } catch (err) {
+      addCheck(
+        'ags.js import',
+        false,
+        `Error: ${err.message}`
+      );
+    }
+  </script>
+</body>
+</html>

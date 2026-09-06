@@ -1,40 +1,41 @@
-// ═══════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════
 // PAWS & PANIC — AGS INTEGRATION
-// ───────────────────────────────────────────────────────────────────────
-// This file overrides the four window.ags* placeholder functions that
-// app.js defines, replacing the simulated behavior with real AGS Web SDK
-// calls.
-//
-//   window.agsLogin()                          — OAuth login
-//   window.agsFindMatch(duration)              — matchmaking v2
-//   window.agsSendPosition(distance)           — real-time position send
-//   window.agsOnReceiveOpponentPosition(dist)  — real-time position recv
+// ────────────────────────────────────────────────────────────────────────
+// Handles matchmaking + lobby + real-time position sync.
+// Auth is now handled by auth.js — this module consumes the SDK instance
+// and user info after login succeeds.
 //
 // Load order (index.html):
-//   <script type="module" src="/app.js"></script>   ← defines placeholders
-//   <script type="module" src="/ags.js"></script>   ← overrides them
+//   <script type="module" src="/app.js"></script>   ← game engine + login UI
+//   <script type="module" src="/ags.js"></script>   ← this file (matchmaking/lobby)
 //
-// IMPORTANT: The exact AGS SDK import paths and method names below are
-// documented as TODOs. Check your AGS Web SDK version's docs and adjust —
-// the AccelByte SDK has evolved (v20 → v28+) and package names differ.
-// ═══════════════════════════════════════════════════════════════════════
+// SDK versions (pinned at integration time):
+//   @accelbyte/sdk@4.3.3
+//   @accelbyte/sdk-iam@6.3.6
+//   @accelbyte/sdk-lobby@5.2.8
+//   @accelbyte/sdk-matchmaking@5.3.6
+// ════════════════════════════════════════════════════════════════════════
 
 import { AGS_CONFIG, isAgsConfigured } from './ags-config.js';
+import { sdk }                          from './auth.js';
 
-// ── TODO: import the SDK pieces you need ─────────────────────────────
-// The imports below are the *typical* shape as of AGS Web SDK v28.
-// If your version differs, adjust package names and named exports.
-//
-// import { AccelByteSDK } from '@accelbyte/sdk';
-// import { IAM }          from '@accelbyte/sdk-iam';
-// import { Matchmaking }  from '@accelbyte/sdk-matchmaking';
-// import { Session }      from '@accelbyte/sdk-session';
-// import { Lobby }        from '@accelbyte/sdk-lobby';
+import { Lobby }           from '@accelbyte/sdk-lobby';
+import { MatchTicketsApi } from '@accelbyte/sdk-matchmaking';
 
-// ═══════════════════════════════════════════════════════════════════════
-// GUARD — skip real wiring if credentials are not configured
-// ═══════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════
+// MODULE STATE — kept alive across window.ags* calls
+// ════════════════════════════════════════════════════════════════════════
 
+const ags = {
+  lobbyWs:          null,   // Lobby.WebSocket client
+  currentSession:   null,   // active matchId from matchmakingNotif
+  opponentUserId:   null,   // opponent AGS userId (for personalChat relay)
+  userInfo:         null,   // { userId, displayName }
+  pendingDuration:  null,   // match duration stored before redirect
+  pendingTicketId:  null,   // active matchmaking ticket ID (for cancellation)
+};
+
+// ── GUARD — skip real wiring if credentials are not configured ──────────
 if (!isAgsConfigured()) {
   console.warn(
     '[AGS] No credentials configured. Using placeholder simulation.\n' +
@@ -45,89 +46,186 @@ if (!isAgsConfigured()) {
   wireUpAgs();
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// MODULE STATE — kept alive across window.ags* calls
-// ═══════════════════════════════════════════════════════════════════════
-
-const ags = {
-  sdk:            null,   // AccelByteSDK instance
-  lobbyWs:        null,   // WebSocket connection to lobby / session
-  currentSession: null,   // active game session object
-  userInfo:       null,   // { userId, displayName, ... }
-};
-
-// ═══════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════
 // MAIN WIRING
-// ═══════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════
 
 function wireUpAgs() {
-  // ── Initialize the SDK once, then override each window.ags* function ──
-  // TODO: adjust to your SDK version's constructor signature.
-  //
-  // ags.sdk = new AccelByteSDK({
-  //   baseURL:   AGS_CONFIG.baseURL,
-  //   clientId:  AGS_CONFIG.clientId,
-  //   namespace: AGS_CONFIG.namespace,
-  //   redirectURI: AGS_CONFIG.redirectURI,
-  // });
-
-  window.agsLogin                     = agsLogin;
-  window.agsFindMatch                 = agsFindMatch;
-  window.agsSendPosition              = agsSendPosition;
-  // NOTE: agsOnReceiveOpponentPosition is the *inbound* callback that
-  //       app.js already defines. We DO NOT override it — instead we
-  //       call it from our lobby-message handler below.
+  window.agsFindMatch    = agsFindMatch;
+  window.agsCancelMatch  = agsCancelMatch;
+  window.agsSendPosition = agsSendPosition;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// 1. LOGIN — OAuth authorization-code flow
-// ═══════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════
+// POST-LOGIN HOOK — called by app.js after any login method succeeds
+// ════════════════════════════════════════════════════════════════════════
 
-async function agsLogin() {
-  console.log('[AGS] agsLogin()');
+export async function onLoginComplete(userInfo) {
+  ags.userInfo = userInfo;
+  console.log('[AGS] onLoginComplete:', userInfo?.displayName);
 
-  // Reach into app.js's UI helpers via the exposed debug hook.
-  const state = window._pp;
-  const setStatus = (msg) => {
-    const el = document.getElementById('menu-login-status');
-    if (el) el.textContent = msg || '';
-  };
-
-  try {
-    setStatus('Redirecting to AGS login…');
-
-    // ── TODO: swap for your SDK's login call ─────────────────────────
-    // For a browser SPA, the auth-code + PKCE flow is standard:
-    //
-    // await ags.sdk.IAM.UserAuthorization.loginWithAuthorizationCode({
-    //   scope: 'commerce account social publishing analytics',
-    // });
-    //
-    // The SDK will redirect to the AGS login page and return here with
-    // a code in the URL, which the SDK exchanges for tokens.
-
-    // After the redirect returns, fetch the user profile:
-    // const me = await ags.sdk.IAM.UserProfile.getMyProfileInfo();
-    // ags.userInfo = { userId: me.userId, displayName: me.displayName };
-
-    // ── Wire up the game state that app.js reads ─────────────────────
-    // state.loggedIn = true;
-    // state.username = ags.userInfo.displayName || 'Runner';
-    // document.getElementById('btn-login').textContent = '👤 ' + state.username;
-    // document.getElementById('btn-login').disabled    = true;
-    // setStatus('Signed in as ' + state.username + ' ✓');
-
-    setStatus('⚠ TODO: implement real AGS login in ags.js');
-    console.warn('[AGS] agsLogin() has TODOs — see ags.js');
-  } catch (err) {
-    console.error('[AGS] Login failed:', err);
-    setStatus('Login failed — check console');
+  if (isAgsConfigured()) {
+    try {
+      await openLobbySocket();
+    } catch (err) {
+      console.warn('[AGS] Could not open lobby socket:', err?.message || err);
+    }
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// 2. MATCHMAKING — Matchmaking v2
-// ═══════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════
+// POST-LOGOUT HOOK — called by app.js on logout
+// ════════════════════════════════════════════════════════════════════════
+
+export function onLogoutComplete() {
+  if (ags.lobbyWs) {
+    ags.lobbyWs.disconnect();
+    ags.lobbyWs = null;
+  }
+  ags.userInfo        = null;
+  ags.currentSession  = null;
+  ags.opponentUserId  = null;
+  console.log('[AGS] onLogoutComplete');
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// LOBBY SOCKET — open once; reused across matches
+// ════════════════════════════════════════════════════════════════════════
+
+async function openLobbySocket() {
+  if (ags.lobbyWs) return ags.lobbyWs;
+
+  console.log('[AGS] Opening Lobby WebSocket…');
+
+  const ws = Lobby.WebSocket(sdk);
+  ws.connect();
+
+  ws.onOpen(() => {
+    console.log('[AGS] Lobby WebSocket open');
+  });
+
+  ws.onClose(ev => {
+    console.log('[AGS] Lobby WebSocket closed', ev.code, ev.reason);
+    ags.lobbyWs = null;
+  });
+
+  ws.onError(err => {
+    console.error('[AGS] Lobby WebSocket error:', err);
+  });
+
+  ws.onMessage(msg => {
+    handleLobbyMessage(msg);
+  });
+
+  ags.lobbyWs = ws;
+  return ws;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// LOBBY MESSAGE HANDLER
+// ════════════════════════════════════════════════════════════════════════
+
+function handleLobbyMessage(msg) {
+  if (!msg?.type) return;
+
+  switch (msg.type) {
+
+    // ── Matchmaking v2 match found ────────────────────────────────────
+    case 'matchmakingNotif': {
+      console.log('[AGS] matchmakingNotif status:', msg.status, 'matchId:', msg.matchId);
+
+      if (msg.status === 'done') {
+        if (ags.currentSession) break;   // already handled by OnMatchFound
+        ags.currentSession = msg.matchId;
+
+        if (Array.isArray(msg.counterPartyMember) && msg.counterPartyMember.length) {
+          ags.opponentUserId = msg.counterPartyMember[0];
+        }
+
+        console.log('[AGS] Match found! sessionId:', ags.currentSession,
+                    'opponent:', ags.opponentUserId);
+
+        if (typeof window._ppStartGame === 'function') {
+          window._ppStartGame('multi', ags.pendingDuration || 30);
+        }
+
+      } else if (msg.status === 'timeout') {
+        console.warn('[AGS] Matchmaking timed out');
+        if (window._pp?.screen === 'matchmaking') {
+          if (typeof window.showScreen === 'function') window.showScreen('menu');
+          const el = document.getElementById('menu-login-status');
+          if (el) el.textContent = 'Matchmaking timed out — try again';
+        }
+      }
+      break;
+    }
+
+    // ── Matchmaking v2: OnMatchFound (contains sessionId + teams) ────────
+    case 'messageNotif': {
+      if (msg.topic !== 'OnMatchFound') break;
+      if (ags.currentSession) break;   // already handled by matchmakingNotif
+      try {
+        const data = JSON.parse(atob(msg.payload));
+        const sessionId = data.ID;
+        ags.currentSession = sessionId;
+        ags.pendingTicketId = null;   // ticket consumed
+
+        // Find opponent: the UserID that isn't ours
+        const myId = ags.userInfo?.userId;
+        const allUsers = (data.Teams || []).flatMap(t => t.UserIDs || []);
+        ags.opponentUserId = allUsers.find(id => id !== myId) || null;
+
+        console.log('[AGS] OnMatchFound — sessionId:', sessionId,
+                    'opponent:', ags.opponentUserId, 'teams:', JSON.stringify(data.Teams));
+
+        if (typeof window._ppStartGame === 'function') {
+          window._ppStartGame('multi', ags.pendingDuration || 30);
+        }
+      } catch (e) {
+        console.warn('[AGS] messageNotif (OnMatchFound) parse error:', e);
+      }
+      break;
+    }
+
+    // ── Matchmaking v2: OnSessionJoined (session members confirmed) ───────
+    case 'messageSessionNotif': {
+      if (msg.topic !== 'OnSessionJoined') break;
+      try {
+        const data = JSON.parse(atob(msg.payload));
+        console.log('[AGS] OnSessionJoined — sessionId:', data.SessionID,
+                    'members:', (data.Members || []).map(m => m.ID).join(', '));
+        // sessionId already set from OnMatchFound; this is a confirmation
+        if (!ags.currentSession) ags.currentSession = data.SessionID;
+      } catch (e) {
+        console.warn('[AGS] messageSessionNotif parse error:', e);
+      }
+      break;
+    }
+
+    // ── Position updates from opponent ────────────────────────────────
+    case 'personalChatNotif': {
+      if (msg.from !== ags.opponentUserId) break;
+      try {
+        const payload = JSON.parse(msg.payload);
+        if (typeof payload.distance === 'number') {
+          window.agsOnReceiveOpponentPosition(payload.distance);
+        }
+      } catch {
+        // ignore malformed payloads
+      }
+      break;
+    }
+
+    default:
+      if (msg.type !== 'connectNotif') {
+        console.log('[AGS] Unhandled lobby message:', msg.type, msg);
+      }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// 2. MATCHMAKING — submit a Matchmaking v2 ticket
+// ════════════════════════════════════════════════════════════════════════
 
 async function agsFindMatch(duration) {
   console.log('[AGS] agsFindMatch(%d)', duration);
@@ -138,128 +236,70 @@ async function agsFindMatch(duration) {
     return null;
   }
 
-  try {
-    // ── TODO: create a matchmaking ticket ────────────────────────────
-    // const ticket = await ags.sdk.Matchmaking.MatchTickets.createMatchTicket({
-    //   matchPool: pool,
-    //   attributes: { /* skill, region, party, etc. */ },
-    // });
-    //
-    // ── TODO: subscribe to lobby / notifications for match result ────
-    // The AGS Lobby WebSocket pushes an OnMatchFound event when a
-    // session is created. Open the socket if you haven't already:
-    //
-    // await openLobbySocket();
-    //
-    // ags.lobbyWs.onMatchFound = (event) => {
-    //   ags.currentSession = event.sessionId;
-    //   joinGameSession(event.sessionId);
-    // };
+  ags.pendingDuration = duration;
 
-    console.warn('[AGS] agsFindMatch() has TODOs — see ags.js. Pool:', pool);
-    return null;
+  try {
+    await openLobbySocket();
+
+    // SDK already throws on error; returns axios response directly.
+    const ticketResult = await MatchTicketsApi(sdk).createMatchTicket({
+      matchPool:  pool,
+      attributes: {},
+    });
+
+    const ticketId = ticketResult.data?.matchTicketID;
+    ags.pendingTicketId = ticketId;
+    console.log('[AGS] Matchmaking ticket submitted — id:', ticketId, 'pool:', pool);
+    return ticketId;
+
   } catch (err) {
-    console.error('[AGS] Matchmaking failed:', err);
+    console.error('[AGS] agsFindMatch() failed:', err);
     return null;
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// 3. REAL-TIME SEND — push our distance to the opponent
-// ═══════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════
+// 2b. CANCEL MATCHMAKING — delete the pending ticket from AGS
+// ════════════════════════════════════════════════════════════════════════
+
+async function agsCancelMatch() {
+  const ticketId = ags.pendingTicketId;
+  if (!ticketId) {
+    console.warn('[AGS] agsCancelMatch() — no pending ticket to cancel');
+    return;
+  }
+
+  try {
+    await MatchTicketsApi(sdk).deleteMatchTicket_ByTicketid(ticketId);
+    console.log('[AGS] Match ticket cancelled:', ticketId);
+  } catch (err) {
+    console.warn('[AGS] agsCancelMatch() failed (ticket may have already expired):', err?.message || err);
+  } finally {
+    ags.pendingTicketId = null;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// 3. REAL-TIME SEND — push position to opponent via personal chat
+// ════════════════════════════════════════════════════════════════════════
 
 function agsSendPosition(distance) {
-  if (!ags.lobbyWs || ags.lobbyWs.readyState !== WebSocket.OPEN) {
-    // Silently skip if socket isn't open yet — the game keeps running.
+  if (!ags.lobbyWs || !ags.opponentUserId || !ags.userInfo) {
     return;
   }
 
-  // ── TODO: adjust envelope shape to your session / lobby protocol ───
-  // Two common approaches:
-  //
-  // A. Send via the AGS Lobby "send message" API:
-  //    ags.sdk.Lobby.sendMessage({
-  //      type:      'position_update',
-  //      sessionId: ags.currentSession,
-  //      payload:   { distance },
-  //    });
-  //
-  // B. Send raw over the WebSocket directly:
-  const msg = JSON.stringify({
-    type:      'position_update',
-    sessionId: ags.currentSession,
-    distance,
+  ags.lobbyWs.sendPersonalChat({
+    type:       'personalChatRequest',
+    from:       ags.userInfo.userId,
+    to:         ags.opponentUserId,
+    id:         Date.now().toString(),
+    payload:    JSON.stringify({ distance }),
+    receivedAt: new Date().toISOString(),
   });
-  ags.lobbyWs.send(msg);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// 4. REAL-TIME RECEIVE — bounces incoming messages to app.js
-// ═══════════════════════════════════════════════════════════════════════
-
-/**
- * Wire this to your lobby socket's message handler. When a peer's
- * position_update lands, forward the distance to app.js which already
- * knows how to render it via window.agsOnReceiveOpponentPosition.
- */
-function handleLobbyMessage(rawMessage) {
-  let msg;
-  try {
-    msg = typeof rawMessage === 'string' ? JSON.parse(rawMessage) : rawMessage;
-  } catch {
-    console.warn('[AGS] Malformed lobby message:', rawMessage);
-    return;
-  }
-
-  switch (msg.type) {
-    case 'position_update':
-      if (typeof msg.distance === 'number') {
-        window.agsOnReceiveOpponentPosition(msg.distance);
-      }
-      break;
-
-    // ── TODO: handle other event types your session emits ─────────────
-    // case 'match_found': ...
-    // case 'session_ended': ...
-    // case 'player_left': ...
-
-    default:
-      console.log('[AGS] Unhandled lobby message:', msg);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// LOBBY SOCKET — open once, reuse across matches
-// ═══════════════════════════════════════════════════════════════════════
-
-async function openLobbySocket() {
-  if (ags.lobbyWs) return ags.lobbyWs;
-
-  // ── TODO: prefer the SDK's Lobby client if your version provides one ─
-  // const lobby = ags.sdk.Lobby.WebSocketClient();
-  // await lobby.connect();
-  // lobby.on('message', handleLobbyMessage);
-  // ags.lobbyWs = lobby;
-
-  // Fallback: open a raw WebSocket. You'll need the AGS-issued access
-  // token and the correct wss:// endpoint for your environment.
-  //
-  // const token = ags.sdk.getAccessToken?.() || '';
-  // const wsURL = AGS_CONFIG.baseURL.replace(/^http/, 'ws') +
-  //               '/lobby/?token=' + encodeURIComponent(token);
-  //
-  // const ws = new WebSocket(wsURL);
-  // ws.onopen    = () => console.log('[AGS] Lobby socket open');
-  // ws.onmessage = (ev) => handleLobbyMessage(ev.data);
-  // ws.onerror   = (err) => console.error('[AGS] Lobby socket error:', err);
-  // ws.onclose   = () => { ags.lobbyWs = null; };
-  // ags.lobbyWs = ws;
-
-  return ags.lobbyWs;
-}
-
-// ═══════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════
 // EXPOSED FOR DEBUGGING
-// ═══════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════
 
 window._ags = ags;

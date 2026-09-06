@@ -3,13 +3,32 @@ node_modules/
 
 # Build output
 dist/
+performance-budget.json
 
 # Env / secrets — never commit real credentials
 .env
 .env.local
 .env.*.local
+.env.test
 
 # Editor / OS
 .DS_Store
 *.log
 .vite/
+*.pem
+*.key
+*.crt
+*.cert
+
+# Agent-generated scratch output — not app code
+.agents/
+.hermes/
+.claude/
+skills-lock.json
+plan/
+output/
+dev-plan/
+docs/
+
+.mcp*
+
