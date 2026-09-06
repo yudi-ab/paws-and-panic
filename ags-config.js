@@ -12,7 +12,7 @@ export const AGS_CONFIG = Object.freeze({
   baseURL:     env.VITE_AGS_BASE_URL     || '',
   namespace:   env.VITE_AGS_NAMESPACE    || '',
   clientId:    env.VITE_AGS_CLIENT_ID    || '',
-  redirectURI: env.VITE_AGS_REDIRECT_URI || window.location.origin,
+  redirectURI: env.VITE_AGS_REDIRECT_URI || `${window.location.origin}${import.meta.env.BASE_URL}`,
 
   matchPools: {
     30: env.VITE_AGS_MATCH_POOL_30 || 'paws-panic-30s',
