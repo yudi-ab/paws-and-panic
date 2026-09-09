@@ -18,6 +18,18 @@ export const AGS_CONFIG = Object.freeze({
     30: env.VITE_AGS_MATCH_POOL_30 || 'paws-panic-30s',
     60: env.VITE_AGS_MATCH_POOL_60 || 'paws-panic-60s',
   },
+
+  stats: {
+    longestMeters:  env.VITE_AGS_STAT_LONGEST_METERS   || 'longest-run-meters',
+    longestSeconds: env.VITE_AGS_STAT_LONGEST_SECONDS  || 'longest-run-seconds',
+    totalWins:      env.VITE_AGS_STAT_TOTAL_WINS       || 'total-wins',
+    totalLosses:    env.VITE_AGS_STAT_TOTAL_LOSSES     || 'total-losses',
+  },
+
+  leaderboards: {
+    meters:  env.VITE_AGS_LEADERBOARD_METERS  || 'longest-run-meters',
+    seconds: env.VITE_AGS_LEADERBOARD_SECONDS || 'longest-run-seconds',
+  },
 });
 
 /**

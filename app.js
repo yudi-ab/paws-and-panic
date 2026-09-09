@@ -33,7 +33,7 @@ import {
 } from './auth.js';
 import { IamUserAuthorizationClient, UsersApi } from '@accelbyte/sdk-iam';
 import { AGS_CONFIG } from './ags-config.js';
-
+import { submitRunResult, fetchLongestRunLeaderboards } from './ags-progress.js';
 
 import { onLoginComplete, onLogoutComplete } from './ags.js';
 
@@ -168,6 +168,13 @@ function cacheDom() {
   dom.resultEmoji   = document.getElementById('result-emoji');
   dom.resultTitle   = document.getElementById('result-title');
   dom.resultBody    = document.getElementById('result-body');
+
+  // Leaderboards
+  dom.leaderboardMetersContainer = document.getElementById('leaderboard-meters');
+  dom.leaderboardSecondsContainer = document.getElementById('leaderboard-seconds');
+  dom.leaderboardTabButtons = document.querySelectorAll('.leaderboard-tab');
+  dom.resultLeaderboard = document.getElementById('result-leaderboard');
+  dom.resultLeaderboardList = document.getElementById('result-leaderboard-list');
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -299,6 +306,9 @@ async function completeLogin() {
   state.username     = profile?.displayName || profile?.userName || 'Runner';
   setStatus('Signed in as ' + state.username + ' ✓');
   updateLoginUI();
+
+  // Load and render leaderboards
+  loadAndRenderLeaderboards();
 
   // Notify ags.js to open lobby socket
   await onLoginComplete({
@@ -625,6 +635,30 @@ function endGame() {
   statsHtml += '</div>';
   dom.resultBody.innerHTML = statsHtml;
 
+  // AGS - Submit progress & Refresh Leaderboards
+  if (state.loggedIn) {
+    const meters = pDist;
+    const seconds = state.duration - state.timeLeft;
+    // Calculate if player actually "won" the match/round
+    const won = (state.mode === 'single' ? (pDist > cDist) : (pDist > oDist));
+
+    submitRunResult({ meters, seconds, won }).then(() => {
+      // Re-fetch and update leaderboards
+      loadAndRenderLeaderboards().then(() => {
+        // Show result leaderboard
+        if (dom.resultLeaderboard) {
+          dom.resultLeaderboard.style.display = 'block';
+          // We can reuse the same render logic but specifically for the result list using meters
+          fetchLongestRunLeaderboards(5).then(lb => {
+            renderLeaderboard(lb.meters, dom.resultLeaderboardList);
+          });
+        }
+      });
+    });
+  } else {
+    if (dom.resultLeaderboard) dom.resultLeaderboard.style.display = 'none';
+  }
+
   showScreen('result');
 }
 
@@ -678,6 +712,33 @@ function stopTimers() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// LEADERBOARD RENDERING
+// ═══════════════════════════════════════════════════════════════════════
+
+async function loadAndRenderLeaderboards() {
+  const lb = await fetchLongestRunLeaderboards(10);
+  renderLeaderboard(lb.meters, dom.leaderboardMetersContainer);
+  renderLeaderboard(lb.seconds, dom.leaderboardSecondsContainer);
+}
+
+function renderLeaderboard(data, container) {
+  if (!container) return;
+  container.innerHTML = '';
+  if (!data || data.length === 0) {
+    container.innerHTML = '<p class="leaderboard-empty">No runs yet</p>';
+    return;
+  }
+  const html = data.map((entry, idx) => `
+    <div class="leaderboard-item">
+      <span class="leaderboard-rank">#${idx + 1}</span>
+      <span class="leaderboard-name">${entry.displayName || entry.userEmail || entry.userId || 'Anonymous'}</span>
+      <span class="leaderboard-value">${entry.value}</span>
+    </div>
+  `).join('');
+  container.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -726,6 +787,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       e.preventDefault();
       onRunClick();
     }
+  });
+
+  // ── Leaderboard tab switching ──────────────────────────────────────
+  dom.leaderboardTabButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      dom.leaderboardTabButtons.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const board = btn.dataset.board;
+      dom.leaderboardMetersContainer.classList.toggle('active', board === 'meters');
+      dom.leaderboardSecondsContainer.classList.toggle('active', board === 'seconds');
+    });
   });
 
   console.log('[Paws & Panic] Initialized — state available at window._pp');

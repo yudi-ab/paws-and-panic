@@ -33,6 +33,12 @@ jobs:
           echo "VITE_AGS_REDIRECT_URI=https://yudi-ab.github.io/paws-and-panic/" >> .env.production
           echo "VITE_AGS_MATCH_POOL_30=paws-panic-30s" >> .env.production
           echo "VITE_AGS_MATCH_POOL_60=paws-panic-60s" >> .env.production
+          echo "VITE_AGS_STAT_LONGEST_METERS=longest-run-meters" >> .env.production
+          echo "VITE_AGS_STAT_LONGEST_SECONDS=longest-run-seconds" >> .env.production
+          echo "VITE_AGS_STAT_TOTAL_WINS=total-wins" >> .env.production
+          echo "VITE_AGS_STAT_TOTAL_LOSSES=total-losses" >> .env.production
+          echo "VITE_AGS_LEADERBOARD_METERS=longest-run-meters" >> .env.production
+          echo "VITE_AGS_LEADERBOARD_SECONDS=longest-run-seconds" >> .env.production
 
       - name: Audit dependencies
         run: npm audit --audit-level=high

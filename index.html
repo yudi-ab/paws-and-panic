@@ -52,6 +52,17 @@
 
       <!-- ── Game modes (shown only when logged in) ────────────── -->
       <div id="game-modes-section" style="display:none;">
+        <!-- Leaderboards -->
+        <div class="menu-section">
+          <h2 class="section-label">📊 Longest Runs</h2>
+          <div class="leaderboard-tabs">
+            <button class="leaderboard-tab active" data-board="meters">🏃 Meters</button>
+            <button class="leaderboard-tab" data-board="seconds">⏱️ Seconds</button>
+          </div>
+          <div id="leaderboard-meters" class="leaderboard-list active"></div>
+          <div id="leaderboard-seconds" class="leaderboard-list"></div>
+        </div>
+
         <div class="menu-section">
           <h2 class="section-label">Single Player</h2>
           <p class="section-hint">Outrun the cat before time runs out</p>
@@ -158,6 +169,13 @@
       <div id="result-emoji" class="result-emoji">🎉</div>
       <h2 id="result-title">Result</h2>
       <div id="result-body" class="result-body"></div>
+
+      <!-- Top runs leaderboard -->
+      <div id="result-leaderboard" class="result-leaderboard" style="display:none;">
+        <h3>📊 Top Runs (Meters)</h3>
+        <div id="result-leaderboard-list" class="leaderboard-list"></div>
+      </div>
+
       <button class="btn btn-primary btn-lg" id="btn-back-menu">Back to Menu</button>
     </div>
   </div>
