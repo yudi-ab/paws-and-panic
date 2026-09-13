@@ -218,8 +218,13 @@ function handleLobbyMessage(msg) {
       if (msg.from !== ags.opponentUserId) break;
       try {
         const payload = JSON.parse(msg.payload);
-        if (typeof payload.distance === 'number') {
-          window.agsOnReceiveOpponentPosition(payload.distance);
+        // Handle both old format (distance) and new format (x, y, panic, etc)
+        if (typeof window.agsOnReceiveOpponentPosition === 'function') {
+          window.agsOnReceiveOpponentPosition({
+            ...payload,
+            playerId: msg.from,
+            timestamp: Date.now()
+          });
         }
       } catch {
         // ignore malformed payloads
@@ -294,17 +299,20 @@ async function agsCancelMatch() {
 // 3. REAL-TIME SEND — push position to opponent via personal chat
 // ════════════════════════════════════════════════════════════════════════
 
-function agsSendPosition(distance) {
+function agsSendPosition(data) {
   if (!ags.lobbyWs || !ags.opponentUserId || !ags.userInfo) {
     return;
   }
+
+  // Support both old format (distance number) and new format (object with x, y, etc)
+  const payload = typeof data === 'number' ? { distance: data } : data || {};
 
   ags.lobbyWs.sendPersonalChat({
     type:       'personalChatRequest',
     from:       ags.userInfo.userId,
     to:         ags.opponentUserId,
     id:         Date.now().toString(),
-    payload:    JSON.stringify({ distance }),
+    payload:    JSON.stringify(payload),
     receivedAt: new Date().toISOString(),
   });
 }
