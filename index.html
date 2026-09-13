@@ -368,6 +368,7 @@
         // ═══════════════════════════════════════════════════════════════════════
 
         window.startSinglePlayer = function(duration) {
+            console.log('[Game] startSinglePlayer() called with duration:', duration);
             currentMode = 'single';
             currentDuration = duration;
             isMultiplayer = false;
@@ -376,6 +377,7 @@
 
             document.getElementById('modeScreen').style.display = 'none';
             document.getElementById('overlayScreen').style.display = 'flex';
+            console.log('[Game] Showing overlay screen, waiting for START GAME click...');
         };
 
         window.startMultiplayer = async function(duration) {
@@ -472,9 +474,16 @@
         };
 
         window.startGameCountdown = function() {
+            console.log('[Game] startGameCountdown() called, mode:', currentMode, 'duration:', currentDuration);
+
+            // Hide all overlay screens
             document.getElementById('matchmakingScreen').style.display = 'none';
-            document.getElementById('overlayScreen').style.display = 'flex';
-            gameState = 'countdown';
+            document.getElementById('overlayScreen').style.display = 'none';
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('modeScreen').style.display = 'none';
+
+            // Initialize and start the game
+            resetGame();
         };
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -931,10 +940,17 @@
         }
 
         // Initialize
-        resetGame();
+        console.log('[Game] Initializing...');
         gameState = 'login';
         showLoginScreen();
-        draw();
+
+        // Draw initial canvas
+        ctx.fillStyle = '#e7bc91';
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = '#888';
+        ctx.font = '24px Nunito';
+        ctx.textAlign = 'center';
+        ctx.fillText('Paws Panic — Sign in to begin', width/2, height/2);
     </script>
 </body>
 </html>
