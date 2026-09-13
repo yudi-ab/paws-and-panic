@@ -167,7 +167,7 @@
     </div>
 
     <!-- START SCREEN OVERLAY -->
-    <div id="overlayScreen" class="absolute inset-0 bg-black/80 flex items-center justify-center backdrop-blur-sm z-50 pointer-events-auto">
+    <div id="overlayScreen" class="absolute inset-0 bg-black/80 flex items-center justify-center backdrop-blur-sm z-50 pointer-events-auto" style="display: none;">
         <div class="bg-amber-100 p-8 rounded-3xl border-8 border-gray-900 max-w-2xl w-full mx-4 shadow-[8px_8px_0_rgba(0,0,0,1)] text-center relative overflow-hidden">
             <h1 id="startTitle" class="font-display text-5xl md:text-7xl text-rose-500 text-stroke-thick mb-6 transform -rotate-2">PAWS PANIC</h1>
 
@@ -349,18 +349,25 @@
         }
 
         function showModeScreen() {
+            console.log('[Game] showModeScreen() called');
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('modeScreen').style.display = 'flex';
             document.getElementById('matchmakingScreen').style.display = 'none';
             document.getElementById('overlayScreen').style.display = 'none';
+            document.getElementById('endScreen').style.display = 'none';
             gameState = 'mode';
+            console.log('[Game] Mode screen: all overlays hidden, modeScreen visible, gameState=mode');
         }
 
         window.backToMode = function() {
+            console.log('[Game] backToMode() called, current gameState:', gameState);
             if (gameState === 'playing' || gameState === 'countdown') {
+                console.log('[Game] Cancelling animation frame');
                 if (animFrameId) cancelAnimationFrame(animFrameId);
             }
+            console.log('[Game] Showing mode screen');
             showModeScreen();
+            console.log('[Game] Mode screen shown');
         };
 
         // ═══════════════════════════════════════════════════════════════════════
