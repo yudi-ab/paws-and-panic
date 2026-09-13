@@ -605,8 +605,20 @@
             return false;
         }
 
+        let debugFrames = 0;
         function update(dt) {
             if (gameState !== 'playing') return;
+
+            // Debug logging (every 60 frames = ~1 second at 60fps)
+            debugFrames++;
+            if (debugFrames % 60 === 0 && isMultiplayer) {
+                let oppId = Object.keys(otherPlayers)[0];
+                if (oppId) {
+                    let opp = otherPlayers[oppId];
+                    console.log('[Debug] Player:', { x: Math.round(player.x), y: Math.round(player.y) },
+                               'Opponent:', { x: Math.round(opp.currentX), y: Math.round(opp.currentY), hasKey: opp.hasKey });
+                }
+            }
 
             // Time logic
             timeRemaining -= dt;
@@ -787,24 +799,53 @@
                         color: colors[1],
                         keysCollected: 0,
                         panic: 0,
-                        lastUpdate: Date.now()
+                        lastUpdate: Date.now(),
+                        hasKey: false,
+                        initialized: true
                     };
                     console.log('[Game] Demo opponent initialized:', opponentUserId);
                 }
 
                 // Simulate opponent movement (for demo/testing)
-                if (otherPlayers[opponentUserId]) {
+                if (otherPlayers[opponentUserId] && otherPlayers[opponentUserId].initialized) {
                     let opp = otherPlayers[opponentUserId];
 
                     // Simple AI: move towards key, then towards exit
-                    let target = keys[0]?.collected ? door : (keys[0] || { x: width * 0.55, y: height * 0.35 });
-                    let dx = target.x - opp.currentX;
-                    let dy = target.y - opp.currentY;
+                    let targetX, targetY;
+                    if (keys[0]?.collected && !opp.hasKey) {
+                        opp.hasKey = true;
+                    }
+
+                    if (opp.hasKey) {
+                        // Move towards exit (green door on left)
+                        targetX = door.x + door.w / 2;
+                        targetY = door.y + door.h / 2;
+                    } else {
+                        // Move towards key
+                        targetX = keys[0]?.x || (width * 0.55);
+                        targetY = keys[0]?.y || (height * 0.35);
+                    }
+
+                    let dx = targetX - opp.currentX;
+                    let dy = targetY - opp.currentY;
                     let dist = Math.sqrt(dx*dx + dy*dy);
 
-                    if (dist > 20) {
-                        opp.currentX += (dx/dist) * 200 * dt;
-                        opp.currentY += (dy/dist) * 200 * dt;
+                    // Move towards target
+                    if (dist > 25) {
+                        let speed = 180; // pixels per second
+                        let moveX = (dx/dist) * speed * dt;
+                        let moveY = (dy/dist) * speed * dt;
+
+                        // Check collisions and move
+                        let newX = opp.currentX + moveX;
+                        let newY = opp.currentY + moveY;
+
+                        if (!checkCollision(newX, opp.currentY, player.radius)) {
+                            opp.currentX = newX;
+                        }
+                        if (!checkCollision(opp.currentX, newY, player.radius)) {
+                            opp.currentY = newY;
+                        }
                     }
 
                     // Simulate panic
@@ -813,6 +854,17 @@
                         opp.panic += (180 - distToMe) * 0.5 * dt;
                     } else {
                         opp.panic = Math.max(0, opp.panic - 15 * dt);
+                    }
+
+                    // Check if opponent collected key
+                    if (!opp.hasKey && keys[0] && !keys[0].collected) {
+                        let kDist = Math.sqrt((opp.currentX - keys[0].x)**2 + (opp.currentY - keys[0].y)**2);
+                        if (kDist < keys[0].grabRadius + player.radius) {
+                            keys[0].collected = true;
+                            opp.hasKey = true;
+                            opp.keysCollected = 1;
+                            console.log('[Game] Opponent collected key');
+                        }
                     }
                 }
 
@@ -938,33 +990,54 @@
                 }
             }
 
-            // Other Players
+            // Other Players (draw first so they're behind player)
             if (isMultiplayer) {
                 for (let id in otherPlayers) {
                     let p = otherPlayers[id];
-                    ctx.globalAlpha = 0.7;
-                    ctx.fillStyle = p.color || '#fff';
-                    ctx.beginPath(); ctx.arc(p.currentX, p.currentY, player.radius, 0, Math.PI*2); ctx.fill();
+                    if (!p.currentX || !p.currentY) continue;
+
+                    // Draw opponent body
+                    ctx.globalAlpha = 0.8;
+                    ctx.fillStyle = p.color || '#10b981';
+                    ctx.beginPath();
+                    ctx.arc(p.currentX, p.currentY, player.radius, 0, Math.PI*2);
+                    ctx.fill();
+
+                    // Draw opponent head
                     ctx.fillStyle = '#fcd34d';
-                    ctx.beginPath(); ctx.arc(p.currentX, p.currentY - 5, player.radius * 0.6, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(p.currentX, p.currentY - 5, player.radius * 0.6, 0, Math.PI*2);
+                    ctx.fill();
                     ctx.globalAlpha = 1.0;
 
+                    // Draw opponent label
                     ctx.fillStyle = 'white';
                     ctx.strokeStyle = 'black';
                     ctx.lineWidth = 2;
-                    ctx.font = '12px Nunito';
+                    ctx.font = 'bold 14px Nunito';
                     ctx.textAlign = 'center';
-                    ctx.strokeText('Opp', p.currentX, p.currentY - 25);
-                    ctx.fillText('Opp', p.currentX, p.currentY - 25);
+                    ctx.strokeText('OPP', p.currentX, p.currentY - 28);
+                    ctx.fillStyle = 'white';
+                    ctx.fillText('OPP', p.currentX, p.currentY - 28);
                     ctx.textAlign = 'left';
                 }
             }
 
-            // Player
+            // Player (draw on top)
+            ctx.globalAlpha = 1.0;
             ctx.fillStyle = player.color;
-            ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2);
+            ctx.fill();
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
+
+            // Draw player head
             ctx.fillStyle = '#fcd34d';
-            ctx.beginPath(); ctx.arc(player.x, player.y - 5, player.radius * 0.6, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath();
+            ctx.arc(player.x, player.y - 5, player.radius * 0.6, 0, Math.PI*2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
 
             // Cat
             ctx.fillStyle = '#f97316';
