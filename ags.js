@@ -232,6 +232,13 @@ function handleLobbyMessage(msg) {
       break;
     }
 
+    // ── Error notifications (don't break game, just log) ─────────────
+    case 'errorNotif': {
+      console.warn('[AGS] Lobby error:', msg.message || msg);
+      // Don't break the game flow on errors
+      break;
+    }
+
     default:
       if (msg.type !== 'connectNotif') {
         console.log('[AGS] Unhandled lobby message:', msg.type, msg);
@@ -304,17 +311,27 @@ function agsSendPosition(data) {
     return;
   }
 
-  // Support both old format (distance number) and new format (object with x, y, etc)
-  const payload = typeof data === 'number' ? { distance: data } : data || {};
+  try {
+    // Support both old format (distance number) and new format (object with x, y, etc)
+    const payload = typeof data === 'number' ? { distance: data } : data || {};
 
-  ags.lobbyWs.sendPersonalChat({
-    type:       'personalChatRequest',
-    from:       ags.userInfo.userId,
-    to:         ags.opponentUserId,
-    id:         Date.now().toString(),
-    payload:    JSON.stringify(payload),
-    receivedAt: new Date().toISOString(),
-  });
+    // Try to send via personalChat
+    if (typeof ags.lobbyWs.sendPersonalChat === 'function') {
+      ags.lobbyWs.sendPersonalChat({
+        type:       'personalChatRequest',
+        from:       ags.userInfo.userId,
+        to:         ags.opponentUserId,
+        id:         Date.now().toString(),
+        payload:    JSON.stringify(payload),
+        receivedAt: new Date().toISOString(),
+      });
+    } else {
+      console.warn('[AGS] sendPersonalChat not available on lobbyWs');
+    }
+  } catch (err) {
+    console.warn('[AGS] agsSendPosition() error:', err?.message || err);
+    // Don't break game flow on position send errors
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════
