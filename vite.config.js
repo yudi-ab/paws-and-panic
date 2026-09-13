@@ -3,6 +3,10 @@ import { defineConfig, loadEnv } from 'vite';
 // Vite config for Paws & Panic.
 // Env vars prefixed with VITE_ are exposed to the client via import.meta.env.
 // Copy .env.example → .env and fill in your AGS credentials.
+// IMPORTANT: For the proxy to work correctly, .env must have:
+//   VITE_AGS_BASE_URL=https://<namespace>.prod.gamingservices.accelbyte.io
+//   VITE_AGS_NAMESPACE=<namespace>
+//   VITE_AGS_CLIENT_ID=<your-client-id>
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const agsTarget = env.VITE_AGS_BASE_URL || 'https://demo.accelbyte.io';
@@ -18,10 +22,13 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       open: true,   // auto-open the browser on `npm run dev`
       proxy: {
-        '/iam':     { target: agsTarget, changeOrigin: true },
-        '/lobby':   { target: agsTarget, changeOrigin: true, ws: true },
-        '/match2':  { target: agsTarget, changeOrigin: true },
-        '/session': { target: agsTarget, changeOrigin: true },
+        '/iam':              { target: agsTarget, changeOrigin: true },
+        '/lobby':            { target: agsTarget, changeOrigin: true, ws: true },
+        '/match2':           { target: agsTarget, changeOrigin: true },
+        '/session':          { target: agsTarget, changeOrigin: true },
+        '/leaderboard':      { target: agsTarget, changeOrigin: true },
+        '/social':           { target: agsTarget, changeOrigin: true },
+        '/iam/v3/public':    { target: agsTarget, changeOrigin: true },
       },
     },
     build: {

@@ -38,6 +38,24 @@ import { submitRunResult, fetchLongestRunLeaderboards } from './ags-progress.js'
 import { onLoginComplete, onLogoutComplete } from './ags.js';
 
 // ═══════════════════════════════════════════════════════════════════════
+// DEBUG: Wrap submitRunResult to log when it's called
+// ═══════════════════════════════════════════════════════════════════════
+const originalSubmitRunResult = submitRunResult;
+window.submitRunResult = async function(stats) {
+  console.log('[DEBUG] submitRunResult() called with stats:', stats);
+  console.log('[DEBUG] SDK token available?', !!sdk.getToken()?.accessToken);
+  console.log('[DEBUG] SDK token:', sdk.getToken());
+  try {
+    const result = await originalSubmitRunResult(stats);
+    console.log('[DEBUG] submitRunResult completed successfully');
+    return result;
+  } catch (error) {
+    console.error('[DEBUG] submitRunResult threw error:', error);
+    throw error;
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -118,6 +136,7 @@ function cacheDom() {
     matchmaking: document.getElementById('screen-matchmaking'),
     game:        document.getElementById('screen-game'),
     result:      document.getElementById('screen-result'),
+    leaderboard: document.getElementById('screen-leaderboard'),
   };
 
   // Menu — login tabs
@@ -268,7 +287,7 @@ async function updateDisplayName(newName) {
     localStorage.setItem('paws_display_name', newName);
     dom.loggedInName.textContent = newName;
     const playerLabel = document.querySelector('.lane-player .char-label');
-    if (playerLabel) playerLabel.textContent = `🏃 ${newName}`;
+    if (playerLabel) playerLabel.textContent = `🐶 ${newName}`;
     console.log('[App] Display name updated to:', newName);
   } catch (e) {
     console.error('[App] Failed to update display name:', e);
@@ -616,18 +635,18 @@ function endGame() {
     <div class="result-verdict ${verdictClass}">${verdict}</div>
     <div class="result-stats">
       <div class="result-stat">
-        <span class="stat-label">🏃 You</span>
+        <span class="stat-label">🐶 You</span>
         <span class="stat-value">${pDist}m</span>
       </div>
       <div class="result-stat">
-        <span class="stat-label">🐈 Cat</span>
+        <span class="stat-label">🦁 Cat</span>
         <span class="stat-value">${cDist}m</span>
       </div>`;
 
   if (state.mode === 'multi') {
     statsHtml += `
       <div class="result-stat">
-        <span class="stat-label">🏃‍♂️ Opp</span>
+        <span class="stat-label">🐶 Opp</span>
         <span class="stat-value">${oDist}m</span>
       </div>`;
   }
@@ -636,6 +655,7 @@ function endGame() {
   dom.resultBody.innerHTML = statsHtml;
 
   // AGS - Submit progress & Refresh Leaderboards
+  console.log('[DEBUG] Game ended. state.loggedIn =', state.loggedIn, '| state.username =', state.username);
   if (state.loggedIn) {
     const meters = pDist;
     const seconds = state.duration - state.timeLeft;
@@ -732,7 +752,7 @@ function renderLeaderboard(data, container) {
     <div class="leaderboard-item">
       <span class="leaderboard-rank">#${idx + 1}</span>
       <span class="leaderboard-name">${entry.displayName || entry.userEmail || entry.userId || 'Anonymous'}</span>
-      <span class="leaderboard-value">${entry.value}</span>
+      <span class="leaderboard-value">${entry.point || entry.value || 0}</span>
     </div>
   `).join('');
   container.innerHTML = html;
@@ -760,6 +780,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-sp-60').addEventListener('click', () => startGameCountdown('single', 60));
   document.getElementById('btn-mp-30').addEventListener('click', () => startMatchmaking('multi', 30));
   document.getElementById('btn-mp-60').addEventListener('click', () => startMatchmaking('multi', 60));
+
+  // ── Leaderboard ────────────────────────────────────────────────────
+  document.getElementById('btn-leaderboard').addEventListener('click', async () => {
+    showScreen('leaderboard');
+    await loadAndRenderLeaderboards();
+  });
+  document.getElementById('btn-leaderboard-back').addEventListener('click', () => {
+    showScreen('menu');
+  });
 
   // ── Matchmaking ────────────────────────────────────────────────────
   document.getElementById('btn-mm-cancel').addEventListener('click', cancelMatchmaking);

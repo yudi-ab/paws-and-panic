@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paws Panic Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ui-red: #ff4747;
+            --ui-dark-red: #b01818;
+            --ui-orange: #ffb142;
+            --ui-yellow: #fcd53f;
+            --ui-blue: #78a2cc;
+            --ui-bg-gray: #a8a8a8;
+            --ui-stroke: #2a2a2a;
+        }
+
+        body {
+            font-family: 'Nunito', sans-serif;
+            background-color: #1a1a1a;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevent scrolling in game view */
+            user-select: none;
+        }
+
+        /* Canvas for the actual game */
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+            background-color: #d19a6a; /* Wooden floor base color */
+        }
+
+        /* Fun, chunky font for headings */
+        .font-display {
+            font-family: 'Fredoka One', cursive;
+        }
+
+        /* Text with thick stroke commonly found in games */
+        .text-stroke-thick {
+            color: white;
+            text-shadow: 
+                -2px -2px 0 var(--ui-stroke),  
+                 2px -2px 0 var(--ui-stroke),
+                -2px  2px 0 var(--ui-stroke),
+                 2px  2px 0 var(--ui-stroke),
+                -3px  0   0 var(--ui-stroke),
+                 3px  0   0 var(--ui-stroke),
+                 0   -3px 0 var(--ui-stroke),
+                 0    3px 0 var(--ui-stroke),
+                 3px  3px 0px rgba(0,0,0,0.5); 
+        }
+        
+        .text-stroke-medium {
+            color: white;
+            text-shadow: 
+                -1.5px -1.5px 0 var(--ui-stroke),  
+                 1.5px -1.5px 0 var(--ui-stroke),
+                -1.5px  1.5px 0 var(--ui-stroke),
+                 1.5px  1.5px 0 var(--ui-stroke),
+                 2px  2px 0px rgba(0,0,0,0.4);
+        }
+
+        /* Vignette effect to focus on center and show panic */
+        .vignette-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: radial-gradient(circle, transparent 60%, rgba(150, 0, 0, 0) 100%);
+            z-index: 10;
+            transition: background 0.3s ease;
+        }
+        
+        /* High panic state for vignette */
+        .panic-high {
+             background: radial-gradient(circle, transparent 30%, rgba(200, 0, 0, 0.6) 100%);
+             box-shadow: inset 0 0 150px rgba(255, 0, 0, 0.4);
+        }
+
+        /* Pulsing animation for the panic meter */
+        @keyframes pulse-border {
+            0% { box-shadow: 0 0 0 0 rgba(255, 71, 71, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(255, 71, 71, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 71, 71, 0); }
+        }
+        
+        .pulse-danger {
+            animation: pulse-border 1.5s infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        .float-anim {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .ui-icon {
+            filter: drop-shadow(2px 2px 0px rgba(0,0,0,0.5));
+        }
+
+        /* Game Over / Win Screens */
+        #overlayScreen {
+            display: none;
+            backdrop-filter: blur(5px);
+            background-color: rgba(0,0,0,0.7);
+        }
+    </style>
+</head>
+<body class="w-screen h-screen relative">
+    
+    <canvas id="gameCanvas"></canvas>
+    <div id="vignette" class="vignette-overlay"></div>
+
+    <!-- MAIN UI CONTAINER -->
+    <div class="absolute inset-0 p-4 md:p-6 lg:p-8 flex flex-col justify-between pointer-events-none z-20">
+        
+        <!-- TOP SECTION -->
+        <div class="flex justify-between items-start w-full">
+            
+            <!-- Logo area -->
+            <div class="flex flex-col items-start transform -rotate-2 hover:rotate-0 transition-transform cursor-pointer pointer-events-auto">
+                <div class="font-display text-4xl md:text-6xl text-yellow-300 text-stroke-thick tracking-wider leading-none flex items-center">
+                    PAWS
+                    <svg class="w-6 h-6 md:w-8 md:h-8 ml-2 -mt-2 fill-current text-yellow-300 drop-shadow-md" viewBox="0 0 24 24" style="filter: drop-shadow(2px 2px 0px #2a2a2a);">
+                        <path d="M12 21.5c-4 0-6-3-6-7s2-8 6-8 6 4 6 8-2 7-6 7zm-5-14c-1.5 0-3-1.5-3-3.5S5.5 1 7 1s3 1.5 3 3.5S8.5 7.5 7 7.5zm10 0c-1.5 0-3-1.5-3-3.5S15.5 1 17 1s3 1.5 3 3.5-1.5 3.5-3 3.5z"/>
+                    </svg>
+                </div>
+                <div class="font-display text-4xl md:text-6xl text-red-500 text-stroke-thick tracking-wider leading-none ml-4 flex items-center">
+                    <svg class="w-5 h-5 md:w-6 md:h-6 mr-1 fill-current text-red-500 drop-shadow-md" viewBox="0 0 24 24" style="filter: drop-shadow(2px 2px 0px #2a2a2a);">
+                        <path d="M12 21.5c-4 0-6-3-6-7s2-8 6-8 6 4 6 8-2 7-6 7zm-5-14c-1.5 0-3-1.5-3-3.5S5.5 1 7 1s3 1.5 3 3.5S8.5 7.5 7 7.5zm10 0c-1.5 0-3-1.5-3-3.5S15.5 1 17 1s3 1.5 3 3.5-1.5 3.5-3 3.5z"/>
+                    </svg>
+                    PANIC
+                </div>
+            </div>
+
+            <!-- Info Area -->
+            <div class="flex flex-col items-end text-right">
+                <!-- Timer -->
+                <div class="mb-4">
+                    <div id="timeDisplay" class="font-display text-5xl md:text-7xl text-white text-stroke-thick leading-none">
+                        0:38
+                    </div>
+                    <div class="text-white text-xl md:text-2xl font-black text-stroke-medium -mt-1 md:-mt-2">
+                        remaining
+                    </div>
+                </div>
+
+                <!-- Objective -->
+                <div class="float-anim mt-2 max-w-[200px]">
+                    <div class="text-yellow-300 text-xl md:text-3xl font-black text-stroke-medium leading-tight">
+                        Objective:
+                    </div>
+                    <div id="objectiveText" class="text-white text-lg md:text-2xl font-bold text-stroke-medium leading-tight">
+                        Collect Keys<br>to Escape
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- BOTTOM SECTION -->
+        <div class="flex justify-between items-end w-full">
+            
+            <!-- Quick Access / Inventory -->
+            <div class="flex flex-col">
+                <div class="text-white text-xl md:text-2xl font-black text-stroke-medium mb-2 pl-1">
+                    Inventory (1, 2)
+                </div>
+                <div class="flex gap-2 md:gap-3 pointer-events-auto">
+                    
+                    <!-- Slot 1: Active (Flashlight) -->
+                    <div id="inv-1" class="inventory-slot w-16 h-16 md:w-20 md:h-20 bg-blue-300 rounded-2xl border-[4px] border-gray-800 shadow-[inset_0_-4px_0_rgba(0,0,0,0.2),_4px_4px_0_rgba(0,0,0,0.5)] flex items-center justify-center cursor-pointer hover:bg-blue-200 transition-colors relative overflow-hidden group">
+                        <div class="active-ring absolute inset-0 border-4 border-yellow-400 rounded-xl opacity-100"></div>
+                        <svg class="w-10 h-10 md:w-12 md:h-12 ui-icon transform -rotate-45 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="4" width="6" height="16" rx="2" fill="#6B21A8" stroke="#1F2937" stroke-width="2"/>
+                            <path d="M9 8h6M11 12h2" stroke="#1F2937" stroke-linecap="round"/>
+                            <circle cx="12" cy="4" r="2" fill="#EF4444" stroke="#1F2937"/>
+                            <path d="M12 2L12 0M10 2L8 0M14 2L16 0" stroke="#EF4444" stroke-width="1.5" stroke-linecap="round" class="animate-pulse"/>
+                        </svg>
+                    </div>
+
+                    <!-- Slot 2: Yarn Ball -->
+                    <div id="inv-2" class="inventory-slot w-16 h-16 md:w-20 md:h-20 bg-gray-400 rounded-2xl border-[4px] border-gray-800 shadow-[inset_0_-4px_0_rgba(0,0,0,0.2),_4px_4px_0_rgba(0,0,0,0.5)] flex items-center justify-center cursor-pointer hover:bg-gray-300 transition-colors relative group">
+                        <div class="active-ring absolute inset-0 border-4 border-yellow-400 rounded-xl opacity-0"></div>
+                         <svg class="w-10 h-10 md:w-14 md:h-14 ui-icon group-hover:rotate-12 transition-transform" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="9" fill="#EF4444" stroke="#1F2937" stroke-width="2"/>
+                            <path d="M7 6c1 3 5 4 8 2M5 10c2 4 7 5 11 2M4 14c3 4 9 4 13 1M8 19c2-4-2-9-5-11" stroke="#991B1B" stroke-width="1.5" fill="none"/>
+                            <path d="M14 20l3 3" stroke="#EF4444" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="text-white text-sm font-bold text-stroke-medium mt-1 pl-1">
+                    Click canvas to use
+                </div>
+            </div>
+
+            <!-- Panic Meter Area -->
+            <div class="flex flex-col items-center">
+                <div class="text-white text-xl md:text-3xl font-black text-stroke-medium mb-1 mr-4">
+                    Panic Meter
+                </div>
+                
+                <!-- Circular Meter -->
+                <div id="panicMeterContainer" class="relative w-32 h-32 md:w-44 md:h-44 pointer-events-auto pulse-danger cursor-help group">
+                    <div class="absolute inset-0 bg-gray-900 rounded-full"></div>
+                    <div class="absolute inset-[4px] bg-white rounded-full flex items-center justify-center overflow-hidden">
+                        <svg class="absolute inset-0 w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="40" fill="none" stroke="#fed7aa" stroke-width="16" />
+                            <!-- 251.2 is circumference. 251.2 = 0%, 0 = 100% -->
+                            <circle id="panicRing" cx="50" cy="50" r="40" fill="none" stroke="#ef4444" stroke-width="16" 
+                                    stroke-dasharray="251.2" stroke-dashoffset="251.2" 
+                                    stroke-linecap="butt" class="transition-all duration-300 ease-out"/>
+                            <circle cx="50" cy="50" r="32" fill="none" stroke="#1f2937" stroke-width="4" />
+                        </svg>
+                        
+                        <div class="absolute inset-[14px] md:inset-[16px] bg-[#ffcfb3] rounded-full flex items-center justify-center border-4 border-gray-800">
+                            <!-- Angry Cat Face SVG -->
+                            <svg class="w-16 h-16 md:w-24 md:h-24 mt-2 group-hover:scale-110 transition-transform" viewBox="0 0 100 100">
+                                <path d="M20 50 L10 20 L40 35 Z" fill="#d97742" stroke="#1f2937" stroke-width="3" stroke-linejoin="round"/>
+                                <path d="M80 50 L90 20 L60 35 Z" fill="#d97742" stroke="#1f2937" stroke-width="3" stroke-linejoin="round"/>
+                                <path d="M18 42 L14 26 L32 35 Z" fill="#fca5a5" stroke="#1f2937" stroke-width="2"/>
+                                <path d="M82 42 L86 26 L68 35 Z" fill="#fca5a5" stroke="#1f2937" stroke-width="2"/>
+                                <ellipse cx="50" cy="60" rx="42" ry="32" fill="#e88a53" stroke="#1f2937" stroke-width="3"/>
+                                <path d="M50 28 L50 40 M42 30 L45 42 M58 30 L55 42" stroke="#9a3412" stroke-width="3" stroke-linecap="round"/>
+                                <circle cx="32" cy="55" r="10" fill="white" stroke="#1f2937" stroke-width="2"/>
+                                <circle cx="68" cy="55" r="10" fill="white" stroke="#1f2937" stroke-width="2"/>
+                                <path d="M20 48 L40 55" stroke="#1f2937" stroke-width="4" stroke-linecap="round"/>
+                                <path d="M80 48 L60 55" stroke="#1f2937" stroke-width="4" stroke-linecap="round"/>
+                                <ellipse cx="32" cy="55" rx="3" ry="7" fill="#1f2937"/>
+                                <ellipse cx="68" cy="55" rx="3" ry="7" fill="#1f2937"/>
+                                <path d="M46 68 L54 68 L50 73 Z" fill="#fca5a5" stroke="#1f2937" stroke-width="2"/>
+                                <path d="M42 78 Q50 72 58 78" stroke="#1f2937" stroke-width="2" fill="none" stroke-linecap="round"/>
+                                <path d="M15 62 L5 58 M15 68 L3 68 M18 74 L8 80" stroke="#1f2937" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M85 62 L95 58 M85 68 L97 68 M82 74 L92 80" stroke="#1f2937" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over / Win Overlay -->
+    <div id="overlayScreen" class="absolute inset-0 z-50 flex items-center justify-center flex-col pointer-events-auto">
+        <h1 id="overlayTitle" class="font-display text-7xl text-white text-stroke-thick mb-4">GAME OVER</h1>
+        <p id="overlaySub" class="text-3xl text-white font-bold text-stroke-medium mb-8">The cat caught you!</p>
+        <button onclick="resetGame()" class="px-8 py-4 bg-yellow-400 hover:bg-yellow-300 text-gray-900 font-display text-3xl rounded-2xl border-4 border-gray-900 shadow-[4px_4px_0_rgba(0,0,0,1)] transition-transform active:translate-y-1 active:translate-x-1 active:shadow-[0px_0px_0_rgba(0,0,0,1)]">
+            PLAY AGAIN
+        </button>
+    </div>
+
+    <!-- Start Screen Overlay -->
+    <div id="startScreen" class="absolute inset-0 z-50 flex items-center justify-center flex-col backdrop-blur-md bg-black/70 pointer-events-auto">
+        <h1 class="font-display text-5xl md:text-7xl text-yellow-400 text-stroke-thick mb-6">HOW TO PLAY</h1>
+        
+        <div class="bg-gray-800 border-4 border-gray-900 rounded-3xl p-6 md:p-8 max-w-2xl w-[90%] mx-4 shadow-[8px_8px_0_rgba(0,0,0,1)] text-white">
+            <ul class="text-lg md:text-2xl font-bold text-stroke-medium space-y-4 mb-8">
+                <li class="flex items-center gap-3">
+                    <span class="w-6 h-6 md:w-8 md:h-8 rounded-full bg-blue-500 inline-block border-2 border-black flex-shrink-0"></span>
+                    <span><strong>You (Blue):</strong> Use W, A, S, D or Arrow Keys to move.</span>
+                </li>
+                <li class="flex items-center gap-3">
+                    <span class="text-2xl md:text-3xl flex-shrink-0">🗝️</span>
+                    <span><strong>Goal:</strong> Grab the key on the green table, then run to the EXIT!</span>
+                </li>
+                <li class="flex items-center gap-3">
+                    <span class="w-6 h-6 md:w-8 md:h-8 rounded-full bg-orange-500 inline-block border-2 border-black flex-shrink-0"></span>
+                    <span><strong>Danger:</strong> Avoid the orange cat! If it catches you, you lose.</span>
+                </li>
+                <li class="flex items-center gap-3">
+                    <span class="text-2xl md:text-3xl flex-shrink-0">🖱️</span>
+                    <span><strong>Survive:</strong> Click inventory items below, then click the screen to distract the cat!</span>
+                </li>
+            </ul>
+            
+            <div class="flex justify-center">
+                <button onclick="startGame()" class="px-8 py-4 bg-green-400 hover:bg-green-300 text-gray-900 font-display text-2xl md:text-3xl rounded-2xl border-4 border-gray-900 shadow-[4px_4px_0_rgba(0,0,0,1)] transition-transform active:translate-y-1 active:translate-x-1 active:shadow-[0px_0px_0_rgba(0,0,0,1)]">
+                    START GAME
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME ENGINE & STATE ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        
+        // Game State Variables
+        let gameState = 'start'; // start, playing, won, lost
+        let lastTime = 0;
+        let timeRemaining = 38; // seconds
+        let panicLevel = 0; // 0 to 100
+        let keysCollected = 0;
+        let totalKeys = 1;
+        let activeInventory = 1; // 1 = Laser, 2 = Yarn
+        let mouseX = 0, mouseY = 0;
+        let isMouseDown = false;
+
+        // Input tracking
+        const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
+
+        // Game Objects
+        let player = { x: 0, y: 0, radius: 20, speed: 250, vx: 0, vy: 0, color: '#3b82f6' };
+        let cat = { x: 0, y: 0, radius: 18, speed: 180, state: 'chasing', distractionTime: 0, color: '#f97316' };
+        let dog = { x: 0, y: 0, radius: 35, state: 'sleeping', wakeRadius: 100, color: '#8b5a2b' };
+        
+        let obstacles = [];
+        let collectibles = [];
+        let distractors = [];
+
+        // UI Elements
+        const timeDisplay = document.getElementById('timeDisplay');
+        const panicRing = document.getElementById('panicRing');
+        const vignette = document.getElementById('vignette');
+        const overlayScreen = document.getElementById('overlayScreen');
+        const startScreen = document.getElementById('startScreen');
+        const overlayTitle = document.getElementById('overlayTitle');
+        const overlaySub = document.getElementById('overlaySub');
+        const objectiveText = document.getElementById('objectiveText');
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            initLevel();
+        }
+
+        window.addEventListener('resize', resize);
+
+        function initLevel() {
+            // Relative positioning based on screen size to maintain layout
+            
+            // Map Boundaries & Furniture (x, y, w, h)
+            obstacles = [
+                // Top Wall/Cabinets
+                { x: 0, y: 0, w: width, h: height * 0.15, color: '#9ca3af' },
+                // Kitchen Island (Top Right-ish)
+                { x: width * 0.5, y: height * 0.2, w: width * 0.3, h: height * 0.2, color: '#4ade80', topColor: '#fcd34d' },
+                // Sofa (Bottom Right)
+                { x: width * 0.55, y: height * 0.55, w: width * 0.45, h: height * 0.3, color: '#f59e0b', topColor: '#d97742' },
+                // Bed (Bottom Middle-Left)
+                { x: width * 0.2, y: height * 0.7, w: width * 0.3, h: height * 0.3, color: '#6b7280', topColor: '#9ca3af' }
+            ];
+
+            // Setup entities relative to screen
+            player.x = width * 0.2;
+            player.y = height * 0.5;
+
+            cat.x = width * 0.8;
+            cat.y = height * 0.6;
+            cat.state = 'chasing';
+
+            dog.x = width * 0.4;
+            dog.y = height * 0.15; // Just below top wall
+            dog.state = 'sleeping';
+
+            // Key on the kitchen island (Moved closer to edge, increased grab radius)
+            collectibles = [
+                { x: width * 0.65, y: height * 0.35, type: 'key', radius: 80, collected: false }
+            ];
+
+            distractors = [];
+        }
+
+        // Input Listeners
+        window.addEventListener('keydown', (e) => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+            if (e.key === '1') selectInventory(1);
+            if (e.key === '2') selectInventory(2);
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            isMouseDown = true;
+            if (gameState !== 'playing') return;
+            
+            // Use Inventory
+            if (activeInventory === 2) { // Drop Yarn
+                distractors.push({
+                    x: mouseX, 
+                    y: mouseY, 
+                    type: 'yarn', 
+                    radius: 12, 
+                    life: 5 // lasts 5 seconds
+                });
+                // Switch back to flashlight automatically
+                selectInventory(1);
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => isMouseDown = false);
+        canvas.addEventListener('touchstart', (e) => {
+            isMouseDown = true;
+            mouseX = e.touches[0].clientX;
+            mouseY = e.touches[0].clientY;
+        });
+        canvas.addEventListener('touchmove', (e) => {
+            mouseX = e.touches[0].clientX;
+            mouseY = e.touches[0].clientY;
+        });
+        canvas.addEventListener('touchend', () => isMouseDown = false);
+
+        function selectInventory(slot) {
+            activeInventory = slot;
+            document.querySelectorAll('.inventory-slot').forEach(el => {
+                el.classList.remove('bg-blue-300');
+                el.classList.add('bg-gray-400');
+                el.querySelector('.active-ring').style.opacity = '0';
+            });
+            const activeEl = document.getElementById(`inv-${slot}`);
+            activeEl.classList.remove('bg-gray-400');
+            activeEl.classList.add('bg-blue-300');
+            activeEl.querySelector('.active-ring').style.opacity = '1';
+        }
+
+        // Inventory UI clicks
+        document.getElementById('inv-1').addEventListener('click', () => selectInventory(1));
+        document.getElementById('inv-2').addEventListener('click', () => selectInventory(2));
+
+        // Utility Math
+        function getDistance(x1, y1, x2, y2) {
+            return Math.sqrt((x2-x1)**2 + (y2-y1)**2);
+        }
+
+        function circleRectCollide(circle, rect) {
+            let testX = circle.x;
+            let testY = circle.y;
+            
+            if (circle.x < rect.x) testX = rect.x;
+            else if (circle.x > rect.x + rect.w) testX = rect.x + rect.w;
+            
+            if (circle.y < rect.y) testY = rect.y;
+            else if (circle.y > rect.y + rect.h) testY = rect.y + rect.h;
+            
+            let distX = circle.x - testX;
+            let distY = circle.y - testY;
+            let distance = Math.sqrt((distX*distX) + (distY*distY));
+            
+            return {
+                colliding: distance <= circle.radius,
+                overlap: circle.radius - distance,
+                dx: distX,
+                dy: distY,
+                dist: distance
+            };
+        }
+
+        function update(dt) {
+            if (gameState !== 'playing') return;
+
+            // --- Player Movement ---
+            let dx = 0;
+            let dy = 0;
+            if (keys.w || keys.ArrowUp) dy -= 1;
+            if (keys.s || keys.ArrowDown) dy += 1;
+            if (keys.a || keys.ArrowLeft) dx -= 1;
+            if (keys.d || keys.ArrowRight) dx += 1;
+
+            // Normalize diagonal speed
+            if (dx !== 0 && dy !== 0) {
+                let length = Math.sqrt(dx*dx + dy*dy);
+                dx /= length;
+                dy /= length;
+            }
+
+            player.x += dx * player.speed * dt;
+            player.y += dy * player.speed * dt;
+
+            // Constrain to screen
+            player.x = Math.max(player.radius, Math.min(width - player.radius, player.x));
+            player.y = Math.max(player.radius, Math.min(height - player.radius, player.y));
+
+            // Obstacle Collision
+            obstacles.forEach(obs => {
+                let col = circleRectCollide(player, obs);
+                if (col.colliding) {
+                    let nx = col.dist === 0 ? 1 : col.dx / col.dist;
+                    let ny = col.dist === 0 ? 0 : col.dy / col.dist;
+                    player.x += nx * col.overlap;
+                    player.y += ny * col.overlap;
+                }
+            });
+
+            // --- Cat AI ---
+            let targetX = player.x;
+            let targetY = player.y;
+
+            // Check distractors
+            if (distractors.length > 0) {
+                targetX = distractors[0].x;
+                targetY = distractors[0].y;
+            } else if (activeInventory === 1 && isMouseDown) {
+                // Laser pointer distraction
+                targetX = mouseX;
+                targetY = mouseY;
+            }
+
+            let catDx = targetX - cat.x;
+            let catDy = targetY - cat.y;
+            let catDist = Math.sqrt(catDx*catDx + catDy*catDy);
+            
+            if (catDist > 0) {
+                cat.x += (catDx / catDist) * cat.speed * dt;
+                cat.y += (catDy / catDist) * cat.speed * dt;
+            }
+
+            // Cat vs Obstacles (simple sliding)
+            obstacles.forEach(obs => {
+                let col = circleRectCollide(cat, obs);
+                if (col.colliding) {
+                    let nx = col.dist === 0 ? 1 : col.dx / col.dist;
+                    let ny = col.dist === 0 ? 0 : col.dy / col.dist;
+                    cat.x += nx * col.overlap;
+                    cat.y += ny * col.overlap;
+                }
+            });
+
+            // Update Distractors
+            for (let i = distractors.length - 1; i >= 0; i--) {
+                distractors[i].life -= dt;
+                if (distractors[i].life <= 0) {
+                    distractors.splice(i, 1);
+                }
+            }
+
+            // --- Dog Logic ---
+            let playerSpeed = Math.sqrt(dx*dx + dy*dy);
+            if (dog.state === 'sleeping' && playerSpeed > 0 && getDistance(player.x, player.y, dog.x, dog.y) < dog.wakeRadius) {
+                // Woke up the dog!
+                dog.state = 'awake';
+            }
+
+            // --- Collectibles ---
+            collectibles.forEach(item => {
+                if (!item.collected && getDistance(player.x, player.y, item.x, item.y) < player.radius + item.radius) {
+                    item.collected = true;
+                    keysCollected++;
+                    objectiveText.innerHTML = `Keys: ${keysCollected}/${totalKeys}<br>Find the Door!`;
+                    // Spawn a door (exit)
+                    obstacles.push({
+                        x: 0, y: height/2 - 50, w: 20, h: 100, color: '#3b82f6', isDoor: true
+                    });
+                }
+            });
+
+            // Door Collision (Win)
+            if (keysCollected >= totalKeys) {
+                obstacles.forEach(obs => {
+                    if (obs.isDoor) {
+                        let col = circleRectCollide(player, obs);
+                        if (col.colliding) {
+                            endGame('won');
+                        }
+                    }
+                });
+            }
+
+            // --- Panic Mechanics ---
+            let distToCat = getDistance(player.x, player.y, cat.x, cat.y);
+            
+            // Cat catching player
+            if (distToCat < player.radius + cat.radius) {
+                panicLevel += 50 * dt; // Rapid increase if touching
+                if(distractors.length === 0 && !(activeInventory === 1 && isMouseDown)){
+                     endGame('lost'); // Caught!
+                }
+            } else if (distToCat < 200) {
+                panicLevel += (200 - distToCat) * 0.1 * dt; // Increase panic when close
+            } else {
+                panicLevel -= 10 * dt; // Cool down
+            }
+            panicLevel = Math.max(0, Math.min(100, panicLevel));
+
+            // Visual feedback for panic
+            if (panicLevel > 70) {
+                vignette.classList.add('panic-high');
+                document.getElementById('panicMeterContainer').classList.add('pulse-danger');
+            } else {
+                vignette.classList.remove('panic-high');
+                document.getElementById('panicMeterContainer').classList.remove('pulse-danger');
+            }
+
+            // Update UI SVG Circle
+            // 251.2 is max offset (0%), 0 is min offset (100%)
+            let offset = 251.2 - (panicLevel / 100) * 251.2;
+            panicRing.style.strokeDashoffset = offset;
+
+            // --- Timer Logic ---
+            timeRemaining -= dt;
+            if (timeRemaining <= 0) {
+                timeRemaining = 0;
+                endGame('lost_time');
+            }
+            
+            // Update Timer UI
+            let seconds = Math.ceil(timeRemaining);
+            timeDisplay.textContent = `0:${seconds < 10 ? '0' : ''}${seconds}`;
+        }
+
+        function endGame(result) {
+            gameState = result;
+            overlayScreen.style.display = 'flex';
+            if (result === 'won') {
+                overlayTitle.textContent = "ESCAPED!";
+                overlayTitle.className = "font-display text-7xl text-green-400 text-stroke-thick mb-4";
+                overlaySub.textContent = "You survived the Paws Panic!";
+            } else {
+                overlayTitle.textContent = "GAME OVER";
+                overlayTitle.className = "font-display text-7xl text-white text-stroke-thick mb-4";
+                overlaySub.textContent = result === 'lost_time' ? "Time ran out!" : "The cat caught you!";
+            }
+        }
+
+        window.resetGame = function() {
+            timeRemaining = 38;
+            panicLevel = 0;
+            keysCollected = 0;
+            gameState = 'playing';
+            overlayScreen.style.display = 'none';
+            objectiveText.innerHTML = `Collect Keys<br>to Escape`;
+            initLevel();
+        }
+
+        window.startGame = function() {
+            startScreen.style.display = 'none';
+            resetGame();
+        }
+
+        function draw() {
+            // Clear & Draw Floor
+            ctx.fillStyle = '#d19a6a';
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw faint floorboard lines
+            ctx.strokeStyle = '#b8865d';
+            ctx.lineWidth = 2;
+            for(let i=0; i<width; i+=60) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, height);
+                ctx.stroke();
+            }
+
+            // Draw Obstacles
+            obstacles.forEach(obs => {
+                ctx.fillStyle = obs.color;
+                ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                
+                if (obs.topColor) {
+                    ctx.fillStyle = obs.topColor;
+                    // Faux 3D top
+                    ctx.fillRect(obs.x + 5, obs.y + 5, obs.w - 10, obs.h - 10);
+                }
+                
+                if (obs.isDoor) {
+                    ctx.fillStyle = '#10b981'; // Green door
+                    ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                    ctx.fillStyle = 'white';
+                    ctx.font = '20px Fredoka One';
+                    ctx.fillText("EXIT", obs.x + 25, obs.y + obs.h/2);
+                }
+            });
+
+            // Draw Distractors (Yarn)
+            distractors.forEach(d => {
+                ctx.fillStyle = '#ef4444';
+                ctx.beginPath();
+                ctx.arc(d.x, d.y, d.radius, 0, Math.PI*2);
+                ctx.fill();
+                ctx.strokeStyle = '#991b1b';
+                ctx.stroke();
+            });
+
+            // Draw Laser Pointer Dot
+            if (activeInventory === 1 && isMouseDown && gameState === 'playing') {
+                ctx.fillStyle = '#ef4444';
+                ctx.beginPath();
+                ctx.arc(mouseX, mouseY, 5, 0, Math.PI*2);
+                ctx.fill();
+                // Laser glow
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = "red";
+                ctx.fill();
+                ctx.shadowBlur = 0; // reset
+            }
+
+            // Draw Collectibles
+            collectibles.forEach(item => {
+                if (!item.collected) {
+                    ctx.font = '30px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('🗝️', item.x, item.y);
+                }
+            });
+
+            // Draw Dog
+            ctx.fillStyle = dog.color;
+            ctx.beginPath();
+            ctx.arc(dog.x, dog.y, dog.radius, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Draw Player (Boy)
+            ctx.fillStyle = player.color;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2);
+            ctx.fill();
+            // Simple head
+            ctx.fillStyle = '#fcd34d';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y - 5, player.radius * 0.6, 0, Math.PI*2);
+            ctx.fill();
+
+            // Draw Cat
+            ctx.fillStyle = cat.color;
+            ctx.beginPath();
+            ctx.arc(cat.x, cat.y, cat.radius, 0, Math.PI*2);
+            ctx.fill();
+            // Cat ears
+            ctx.beginPath();
+            ctx.moveTo(cat.x - 10, cat.y - 5);
+            ctx.lineTo(cat.x - 15, cat.y - 15);
+            ctx.lineTo(cat.x, cat.y - 10);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(cat.x + 10, cat.y - 5);
+            ctx.lineTo(cat.x + 15, cat.y - 15);
+            ctx.lineTo(cat.x, cat.y - 10);
+            ctx.fill();
+
+            // Status Texts over entities
+            ctx.font = 'bold 16px Nunito';
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 3;
+            
+            if (dog.state === 'sleeping') {
+                let zOffset = Math.sin(Date.now() / 200) * 5;
+                ctx.strokeText('Zzz', dog.x, dog.y - 40 + zOffset);
+                ctx.fillText('Zzz', dog.x, dog.y - 40 + zOffset);
+            } else {
+                ctx.fillStyle = 'red';
+                ctx.strokeText('!', dog.x, dog.y - 40);
+                ctx.fillText('!', dog.x, dog.y - 40);
+            }
+            
+            if (gameState === 'playing' && distractors.length === 0 && !(activeInventory === 1 && isMouseDown)) {
+                 ctx.fillStyle = 'red';
+                 ctx.strokeText('!', cat.x, cat.y - 25);
+                 ctx.fillText('!', cat.x, cat.y - 25);
+            } else if (gameState === 'playing') {
+                 ctx.fillStyle = 'yellow';
+                 ctx.strokeText('?', cat.x, cat.y - 25);
+                 ctx.fillText('?', cat.x, cat.y - 25);
+            }
+        }
+
+        function gameLoop(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            let dt = (timestamp - lastTime) / 1000; // Delta time in seconds
+            lastTime = timestamp;
+
+            // Cap dt to prevent huge jumps if tab is inactive
+            if (dt > 0.1) dt = 0.1;
+
+            update(dt);
+            draw();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize and Start
+        window.onload = () => {
+            resize();
+            requestAnimationFrame(gameLoop);
+        };
+
+    </script>
+</body>
+</html>

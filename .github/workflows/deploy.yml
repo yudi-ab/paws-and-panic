@@ -22,15 +22,35 @@ jobs:
 
       - run: npm ci
 
-      # VITE_AGS_REDIRECT_URI is used by AGS OAuth and Google login (auth.js).
-      # Must also be listed under Authorized redirect URIs (and origin under
-      # Authorized JavaScript origins) on the Google OAuth client.
-      - name: Configure production service
+      # Configure production AGS credentials for the build.
+      # This ensures the production build uses the dedicated prod OAuth client
+      # (separate from dev for safety and isolation).
+      #
+      # VITE_AGS_PROD_CLIENT_ID: dedicated OAuth client ID for production
+      # VITE_AGS_PROD_REDIRECT_URI: production domain redirect URI
+      #   (must match exactly what's registered in AGS admin)
+      #
+      # The app detects production via isProduction() in ags-config.js
+      # and automatically selects the prod client credentials.
+      #
+      # ⚠️  TODO: Create a dedicated OAuth client in AGS admin console:
+      #     1. Login to AGS admin for abyuditest-pawsandpanic
+      #     2. Create new OAuth client (e.g., "Paws & Panic Web Prod")
+      #     3. Set redirect URI to: https://yudi-ab.github.io/paws-and-panic/
+      #     4. Copy the client ID and update VITE_AGS_PROD_CLIENT_ID below
+      #
+      - name: Configure production AGS credentials
         run: |
           echo "VITE_AGS_BASE_URL=https://abyuditest-pawsandpanic.prod.gamingservices.accelbyte.io" >> .env.production
           echo "VITE_AGS_NAMESPACE=abyuditest-pawsandpanic" >> .env.production
+          # Dedicated production OAuth client (separate from dev for safety)
+          # ✅ Created 2026-09-12 with AGS CLI
+          echo "VITE_AGS_PROD_CLIENT_ID=8bf714a8a0984eb69364c32c072a57f0" >> .env.production
+          echo "VITE_AGS_PROD_REDIRECT_URI=https://yudi-ab.github.io/paws-and-panic/" >> .env.production
+          # Dev client fallback (for compatibility)
           echo "VITE_AGS_CLIENT_ID=1d2aecca2a234c49b14a664f1b7953fc" >> .env.production
-          echo "VITE_AGS_REDIRECT_URI=https://yudi-ab.github.io/paws-and-panic/" >> .env.production
+          echo "VITE_AGS_REDIRECT_URI=http://localhost:5173" >> .env.production
+          # Match pools and leaderboards
           echo "VITE_AGS_MATCH_POOL_30=paws-panic-30s" >> .env.production
           echo "VITE_AGS_MATCH_POOL_60=paws-panic-60s" >> .env.production
           echo "VITE_AGS_STAT_LONGEST_METERS=longest-run-meters" >> .env.production

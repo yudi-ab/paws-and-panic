@@ -52,17 +52,6 @@
 
       <!-- ── Game modes (shown only when logged in) ────────────── -->
       <div id="game-modes-section" style="display:none;">
-        <!-- Leaderboards -->
-        <div class="menu-section">
-          <h2 class="section-label">📊 Longest Runs</h2>
-          <div class="leaderboard-tabs">
-            <button class="leaderboard-tab active" data-board="meters">🏃 Meters</button>
-            <button class="leaderboard-tab" data-board="seconds">⏱️ Seconds</button>
-          </div>
-          <div id="leaderboard-meters" class="leaderboard-list active"></div>
-          <div id="leaderboard-seconds" class="leaderboard-list"></div>
-        </div>
-
         <div class="menu-section">
           <h2 class="section-label">Single Player</h2>
           <p class="section-hint">Outrun the cat before time runs out</p>
@@ -79,6 +68,10 @@
             <button class="btn btn-match" id="btn-mp-30">⚡ 30s</button>
             <button class="btn btn-match" id="btn-mp-60">🔥 60s</button>
           </div>
+        </div>
+
+        <div class="menu-section">
+          <button class="btn btn-ghost btn-lg" id="btn-leaderboard" style="width:100%;">📊 Leaderboard</button>
         </div>
       </div>
 
@@ -126,16 +119,16 @@
     <div class="track" id="track">
       <div class="track-marks" aria-hidden="true"></div>
       <div class="track-lane lane-cat" id="lane-cat">
-        <span class="char-label">🐈</span>
-        <div class="char-wrap" id="wrap-cat"><span class="char-icon" id="char-cat">🐈</span></div>
+        <span class="char-label">🦁</span>
+        <div class="char-wrap" id="wrap-cat"><span class="char-icon" id="char-cat">🦁</span></div>
       </div>
       <div class="track-lane lane-player" id="lane-player">
-        <span class="char-label">🏃 You</span>
-        <div class="char-wrap" id="wrap-player"><span class="char-icon" id="char-player">🏃</span></div>
+        <span class="char-label">🐶 You</span>
+        <div class="char-wrap" id="wrap-player"><span class="char-icon" id="char-player">🐶</span></div>
       </div>
       <div class="track-lane lane-opponent" id="lane-opponent" style="display:none">
-        <span class="char-label">🏃‍♂️ Opp</span>
-        <div class="char-wrap" id="wrap-opponent"><span class="char-icon" id="char-opponent">🏃‍♂️</span></div>
+        <span class="char-label">🐶 Opp</span>
+        <div class="char-wrap" id="wrap-opponent"><span class="char-icon" id="char-opponent">🐶</span></div>
       </div>
       <div class="track-finish" aria-hidden="true">🏁</div>
     </div>
@@ -177,6 +170,25 @@
       </div>
 
       <button class="btn btn-primary btn-lg" id="btn-back-menu">Back to Menu</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN: LEADERBOARD
+       ═══════════════════════════════════════════════════════════════ -->
+  <div id="screen-leaderboard" class="screen">
+    <div class="result-card">
+      <h2>📊 Leaderboard</h2>
+
+      <div class="leaderboard-tabs">
+        <button class="leaderboard-tab active" data-board="meters">🐶 Meters</button>
+        <button class="leaderboard-tab" data-board="seconds">⏱️ Seconds</button>
+      </div>
+
+      <div id="leaderboard-meters" class="leaderboard-list active"></div>
+      <div id="leaderboard-seconds" class="leaderboard-list"></div>
+
+      <button class="btn btn-ghost btn-lg" id="btn-leaderboard-back" style="width:100%; margin-top:16px;">← Back to Menu</button>
     </div>
   </div>
 
