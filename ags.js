@@ -239,6 +239,12 @@ function handleLobbyMessage(msg) {
       break;
     }
 
+    // ── Personal chat response (position sync not using this API) ─────
+    case 'personalChatResponse': {
+      // Suppress - not using personalChat for position sync anymore
+      break;
+    }
+
     default:
       if (msg.type !== 'connectNotif') {
         console.log('[AGS] Unhandled lobby message:', msg.type, msg);
@@ -307,31 +313,13 @@ async function agsCancelMatch() {
 // ════════════════════════════════════════════════════════════════════════
 
 function agsSendPosition(data) {
-  if (!ags.lobbyWs || !ags.opponentUserId || !ags.userInfo) {
-    return;
-  }
-
-  try {
-    // Support both old format (distance number) and new format (object with x, y, etc)
-    const payload = typeof data === 'number' ? { distance: data } : data || {};
-
-    // Try to send via personalChat
-    if (typeof ags.lobbyWs.sendPersonalChat === 'function') {
-      ags.lobbyWs.sendPersonalChat({
-        type:       'personalChatRequest',
-        from:       ags.userInfo.userId,
-        to:         ags.opponentUserId,
-        id:         Date.now().toString(),
-        payload:    JSON.stringify(payload),
-        receivedAt: new Date().toISOString(),
-      });
-    } else {
-      console.warn('[AGS] sendPersonalChat not available on lobbyWs');
-    }
-  } catch (err) {
-    console.warn('[AGS] agsSendPosition() error:', err?.message || err);
-    // Don't break game flow on position send errors
-  }
+  // NOTE: Position sync via personalChat was rejected by AGS (Request rejected error)
+  // Instead, we use demo opponent movement which works locally
+  // For real multiplayer position sync, a dedicated API endpoint or session
+  // attributes should be used instead of personalChat
+  //
+  // This function is kept for API compatibility but doesn't send anything
+  return;
 }
 
 // ════════════════════════════════════════════════════════════════════════

@@ -868,19 +868,9 @@
                     }
                 }
 
-                // Send position via AGS (if configured)
-                let now = Date.now();
-                if (now - lastSyncTime > 100 && typeof window.agsSendPosition === 'function') {
-                    lastSyncTime = now;
-                    // Only send if AGS is actually configured
-                    if (window._ags && window._ags.lobbyWs && window._ags.opponentUserId) {
-                        try {
-                            window.agsSendPosition({ x: player.x, y: player.y, panic: panicLevel });
-                        } catch (err) {
-                            console.warn('[Game] Failed to send position:', err);
-                        }
-                    }
-                }
+                // NOTE: Real AGS position sync via personalChat was rejected
+                // Using demo opponent AI instead for testing multiplayer gameplay
+                // For production, implement position sync via dedicated API endpoint
             }
         }
 
