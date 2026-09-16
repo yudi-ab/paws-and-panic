@@ -73,6 +73,7 @@ export const AGS_CONFIG = Object.freeze({
   stats: {
     longestMeters:  env.VITE_AGS_STAT_LONGEST_METERS   || 'longest-run-meters',
     longestSeconds: env.VITE_AGS_STAT_LONGEST_SECONDS  || 'longest-run-seconds',
+    lowestPanic:    env.VITE_AGS_STAT_LOWEST_PANIC     || 'lowest-panic',
     totalWins:      env.VITE_AGS_STAT_TOTAL_WINS       || 'total-wins',
     totalLosses:    env.VITE_AGS_STAT_TOTAL_LOSSES     || 'total-losses',
   },
@@ -80,6 +81,7 @@ export const AGS_CONFIG = Object.freeze({
   leaderboards: {
     meters:  env.VITE_AGS_LEADERBOARD_METERS  || 'longest-run-meters',
     seconds: env.VITE_AGS_LEADERBOARD_SECONDS || 'longest-run-seconds',
+    panic:   env.VITE_AGS_LEADERBOARD_PANIC   || 'lowest-panic',
   },
 });
 

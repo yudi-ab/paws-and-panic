@@ -359,6 +359,12 @@
                             return { name: e.name, score: `${mins}m ${secs}s` };
                         });
                     }
+                    if (real?.panic && real.panic.length > 0) {
+                        leaderboardDataSets.panic = real.panic.map(e => ({
+                            name:  e.name,
+                            score: `${e.score}%`,
+                        }));
+                    }
                 } catch (e) {
                     console.warn('[Leaderboard] Failed to load real data, using dummy:', e);
                 }
@@ -385,8 +391,8 @@
             });
 
             const header = document.getElementById('leaderboardScoreHeader');
-            if(tabId === 'fastest') header.innerText = "Time";
-            if(tabId === 'panic') header.innerText = "Max Panic";
+            if(tabId === 'fastest') header.innerText = "Distance";
+            if(tabId === 'panic') header.innerText = "Lowest Panic";
             if(tabId === 'survival') header.innerText = "Time Survived";
 
             const dataContainer = document.getElementById('leaderboardData');
@@ -426,6 +432,7 @@
         let survivalTimer = 0; // --- BEGIN ACCELBYTE ENDLESS MODE ---
         let catSpawnTimer = 0; // --- END ACCELBYTE ENDLESS MODE ---
         let totalDistancePx = 0; // --- ACCELBYTE: cumulative player movement in pixels ---
+        let maxPanicLevel = 0; // --- ACCELBYTE: peak panic reached during run ---
         let timeRemaining = 38;
         let panicLevel = 0;
         let activeInventory = 1;
@@ -897,6 +904,7 @@
             player.x = width * 0.2;
             player.y = height * 0.4;
             totalDistancePx = 0; // --- ACCELBYTE: reset distance tracker on new game ---
+            maxPanicLevel = 0;   // --- ACCELBYTE: reset peak panic on new game ---
             if (isMultiplayer && !player.assigned) {
                 player.color = colors[Math.floor(Math.random() * colors.length)];
                 player.assigned = true;
@@ -959,8 +967,9 @@
                 survivalTimer += dt;
                 catSpawnTimer += dt;
 
-                // Spawn new cat increasingly often over time (every 15s → down to 4s)
-                let spawnInterval = Math.max(4, 15 - survivalTimer / 60);
+                // Spawn new cat increasingly often over time
+                // starts every 12s → speeds up to every 3s after ~90s
+                let spawnInterval = Math.max(3, 12 - survivalTimer / 10);
                 if (catSpawnTimer >= spawnInterval) {
                     catSpawnTimer = 0;
                     let sx = Math.random() > 0.5 ? 50 : width - 50;
@@ -1143,6 +1152,8 @@
             } else {
                 panicLevel = Math.max(0, panicLevel - 20 * dt);
             }
+            // Track peak panic reached during this match
+            if (panicLevel > maxPanicLevel) maxPanicLevel = panicLevel;
             // --- END ACCELBYTE PANIC FROM MULTIPLE CATS ---
 
             // Visual Update
@@ -1216,12 +1227,18 @@
                         }
                     }
 
-                    // Simulate panic
-                    let distToMe = Math.sqrt((opp.currentX - cat.x)**2 + (opp.currentY - cat.y)**2);
-                    if (distToMe < 180) {
-                        opp.panic += (180 - distToMe) * 0.5 * dt;
-                    } else {
-                        opp.panic = Math.max(0, opp.panic - 15 * dt);
+                    // Simulate panic — check closest cat to opponent
+                    const closestCatToOpp = cats.reduce((closest, c) => {
+                        const d = Math.sqrt((opp.currentX - c.x)**2 + (opp.currentY - c.y)**2);
+                        return d < closest.d ? { d, c } : closest;
+                    }, { d: Infinity, c: null }).c;
+                    if (closestCatToOpp) {
+                        let distToMe = Math.sqrt((opp.currentX - closestCatToOpp.x)**2 + (opp.currentY - closestCatToOpp.y)**2);
+                        if (distToMe < 180) {
+                            opp.panic += (180 - distToMe) * 0.5 * dt;
+                        } else {
+                            opp.panic = Math.max(0, opp.panic - 15 * dt);
+                        }
                     }
 
                     // Check if opponent collected key
@@ -1272,7 +1289,8 @@
                 const seconds = currentMode === 'endless'
                     ? Math.ceil(survivalTimer)
                     : Math.max(1, currentDuration - Math.ceil(timeRemaining));
-                window.submitRunResult({ meters, seconds, won: win, mode: currentMode });
+                const maxPanic = Math.round(maxPanicLevel);
+                window.submitRunResult({ meters, seconds, maxPanic, won: win, mode: currentMode });
             }
         }
 

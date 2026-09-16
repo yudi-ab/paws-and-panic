@@ -331,7 +331,7 @@ function agsSendPosition(data) {
 // 4. SUBMIT RUN RESULT — update stats (MAX strategy) after each game
 // ════════════════════════════════════════════════════════════════════════
 
-async function submitRunResult({ meters, seconds, won, mode }) {
+async function submitRunResult({ meters, seconds, maxPanic, won, mode }) {
   let userId = ags.userInfo?.userId;
 
   // Fallback: extract userId from SDK token if not directly set
@@ -360,27 +360,44 @@ async function submitRunResult({ meters, seconds, won, mode }) {
     return;
   }
 
-  console.log('[AGS] submitRunResult — user:', userId, 'meters:', meters, 'seconds:', seconds, 'won:', won, 'mode:', mode);
+  console.log('[AGS] submitRunResult — user:', userId, 'meters:', meters, 'seconds:', seconds, 'maxPanic:', maxPanic, 'won:', won, 'mode:', mode);
+
+  const displayName = ags.userInfo?.displayName || ags.userInfo?.username || 'Player';
+  const additionalData = { displayName };
 
   const updates = [];
 
-  // Always update meters (MAX — only improves when player beats their best)
-  updates.push({
-    statCode:       AGS_CONFIG.stats.longestMeters,
-    updateStrategy: 'MAX',
-    value:          meters,
-  });
+  // 1. Distance in meters (MAX strategy — personal best)
+  if (typeof meters === 'number' && meters > 0) {
+    updates.push({
+      statCode:       AGS_CONFIG.stats.longestMeters,
+      updateStrategy: 'MAX',
+      value:          meters,
+      additionalData,
+    });
+  }
 
-  // Survival time (endless mode only)
-  if (mode === 'endless') {
+  // 2. Survival time in seconds (MAX strategy — personal best)
+  if (typeof seconds === 'number' && seconds > 0) {
     updates.push({
       statCode:       AGS_CONFIG.stats.longestSeconds,
       updateStrategy: 'MAX',
       value:          seconds,
+      additionalData,
     });
   }
 
-  // Win/loss counters
+  // 3. Lowest Panic reached (MIN strategy — lower peak panic is better)
+  if (typeof maxPanic === 'number' && !isNaN(maxPanic)) {
+    updates.push({
+      statCode:       AGS_CONFIG.stats.lowestPanic,
+      updateStrategy: 'MIN',
+      value:          Math.max(0, Math.min(100, Math.round(maxPanic))),
+      additionalData,
+    });
+  }
+
+  // 4. Win/loss counters (INCREMENT)
   if (won) {
     updates.push({ statCode: AGS_CONFIG.stats.totalWins,   updateStrategy: 'INCREMENT', value: 1 });
   } else {
@@ -410,7 +427,7 @@ async function submitRunResult({ meters, seconds, won, mode }) {
 
 // ════════════════════════════════════════════════════════════════════════
 // 5. LOAD LEADERBOARD — fetch real rankings from AGS
-//    Returns { fastest, survival } each as [{ name, score, userId }]
+//    Returns { meters, seconds, panic } each as [{ name, score, userId }]
 // ════════════════════════════════════════════════════════════════════════
 
 async function loadLeaderboard() {
@@ -422,42 +439,36 @@ async function loadLeaderboard() {
       const rawEntries = res?.data?.data || [];
       if (!rawEntries.length) return [];
 
-      // Bulk fetch user profiles for display names
-      const userIds = [...new Set(rawEntries.map(e => e.userId).filter(Boolean))];
-      const nameMap = {};
-      if (userIds.length > 0) {
-        try {
-          const usersApi = UsersApi(sdk);
-          const bulkRes = await usersApi.createUserBulkBasic_v3({ userIds }).catch(() => null);
-          const userList = bulkRes?.data?.data || [];
-          userList.forEach(u => {
-            const name = u?.displayName || u?.userName || u?.uniqueDisplayName;
-            if (u?.userId && name) {
-              nameMap[u.userId] = name;
-            }
-          });
-        } catch (e) {
-          console.warn('[AGS] Failed to bulk fetch profile names:', e);
+      return rawEntries.map(entry => {
+        // Read displayName stored in additionalData on stat submission
+        let name = entry.additionalData?.displayName;
+        if (!name) {
+          // If current logged-in user, use active displayName
+          if (entry.userId === ags.userInfo?.userId) {
+            name = ags.userInfo?.displayName || 'You';
+          } else {
+            name = `Runner-${entry.userId?.slice(0, 6) || 'Guest'}`;
+          }
         }
-      }
-
-      return rawEntries.map(entry => ({
-        userId: entry.userId,
-        score:  entry.point,
-        name:   nameMap[entry.userId] || entry.additionalData?.displayName || entry.userId?.slice(0, 8) || 'Player',
-      }));
+        return {
+          userId: entry.userId,
+          score:  entry.point,
+          name:   name,
+        };
+      });
     } catch (err) {
       console.warn('[AGS] loadLeaderboard failed for', leaderboardCode, ':', err?.message || err);
       return null; // null = use fallback dummy data
     }
   };
 
-  const [metersData, secondsData] = await Promise.all([
+  const [metersData, secondsData, panicData] = await Promise.all([
     fetchTab(AGS_CONFIG.leaderboards.meters),
     fetchTab(AGS_CONFIG.leaderboards.seconds),
+    fetchTab(AGS_CONFIG.leaderboards.panic),
   ]);
 
-  return { meters: metersData, seconds: secondsData };
+  return { meters: metersData, seconds: secondsData, panic: panicData };
 }
 
 // ════════════════════════════════════════════════════════════════════════
