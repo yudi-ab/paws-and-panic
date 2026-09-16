@@ -32,6 +32,11 @@ export const sdk = AccelByte.SDK({
     namespace:   AGS_CONFIG.namespace,
     redirectURI: AGS_CONFIG.redirectURI,
   },
+  axiosConfig: {
+    request: {
+      withCredentials: false,
+    },
+  },
 });
 
 // ════════════════════════════════════════════════════════════════════════
@@ -173,7 +178,6 @@ export async function loginWithPassword(identifier, password) {
         username:   identifier,
         password,
       }).toString(),
-      credentials: 'include',
     });
 
     const payload = await resp.json().catch(() => ({}));
@@ -277,7 +281,6 @@ export async function refreshSession() {
         grant_type:    'refresh_token',
         refresh_token: refreshToken,
       }).toString(),
-      credentials: 'include',
     });
 
     const payload = await resp.json().catch(() => ({}));

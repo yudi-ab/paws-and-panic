@@ -33,9 +33,27 @@ import {
 } from './auth.js';
 import { IamUserAuthorizationClient, UsersApi } from '@accelbyte/sdk-iam';
 import { AGS_CONFIG } from './ags-config.js';
-
+import { submitRunResult, fetchLongestRunLeaderboards } from './ags-progress.js';
 
 import { onLoginComplete, onLogoutComplete } from './ags.js';
+
+// ═══════════════════════════════════════════════════════════════════════
+// DEBUG: Wrap submitRunResult to log when it's called
+// ═══════════════════════════════════════════════════════════════════════
+const originalSubmitRunResult = submitRunResult;
+window.submitRunResult = async function(stats) {
+  console.log('[DEBUG] submitRunResult() called with stats:', stats);
+  console.log('[DEBUG] SDK token available?', !!sdk.getToken()?.accessToken);
+  console.log('[DEBUG] SDK token:', sdk.getToken());
+  try {
+    const result = await originalSubmitRunResult(stats);
+    console.log('[DEBUG] submitRunResult completed successfully');
+    return result;
+  } catch (error) {
+    console.error('[DEBUG] submitRunResult threw error:', error);
+    throw error;
+  }
+};
 
 // ═══════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -118,6 +136,7 @@ function cacheDom() {
     matchmaking: document.getElementById('screen-matchmaking'),
     game:        document.getElementById('screen-game'),
     result:      document.getElementById('screen-result'),
+    leaderboard: document.getElementById('screen-leaderboard'),
   };
 
   // Menu — login tabs
@@ -168,6 +187,13 @@ function cacheDom() {
   dom.resultEmoji   = document.getElementById('result-emoji');
   dom.resultTitle   = document.getElementById('result-title');
   dom.resultBody    = document.getElementById('result-body');
+
+  // Leaderboards
+  dom.leaderboardMetersContainer = document.getElementById('leaderboard-meters');
+  dom.leaderboardSecondsContainer = document.getElementById('leaderboard-seconds');
+  dom.leaderboardTabButtons = document.querySelectorAll('.leaderboard-tab');
+  dom.resultLeaderboard = document.getElementById('result-leaderboard');
+  dom.resultLeaderboardList = document.getElementById('result-leaderboard-list');
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -261,7 +287,7 @@ async function updateDisplayName(newName) {
     localStorage.setItem('paws_display_name', newName);
     dom.loggedInName.textContent = newName;
     const playerLabel = document.querySelector('.lane-player .char-label');
-    if (playerLabel) playerLabel.textContent = `🏃 ${newName}`;
+    if (playerLabel) playerLabel.textContent = `🐶 ${newName}`;
     console.log('[App] Display name updated to:', newName);
   } catch (e) {
     console.error('[App] Failed to update display name:', e);
@@ -299,6 +325,9 @@ async function completeLogin() {
   state.username     = profile?.displayName || profile?.userName || 'Runner';
   setStatus('Signed in as ' + state.username + ' ✓');
   updateLoginUI();
+
+  // Load and render leaderboards
+  loadAndRenderLeaderboards();
 
   // Notify ags.js to open lobby socket
   await onLoginComplete({
@@ -606,24 +635,49 @@ function endGame() {
     <div class="result-verdict ${verdictClass}">${verdict}</div>
     <div class="result-stats">
       <div class="result-stat">
-        <span class="stat-label">🏃 You</span>
+        <span class="stat-label">🐶 You</span>
         <span class="stat-value">${pDist}m</span>
       </div>
       <div class="result-stat">
-        <span class="stat-label">🐈 Cat</span>
+        <span class="stat-label">🦁 Cat</span>
         <span class="stat-value">${cDist}m</span>
       </div>`;
 
   if (state.mode === 'multi') {
     statsHtml += `
       <div class="result-stat">
-        <span class="stat-label">🏃‍♂️ Opp</span>
+        <span class="stat-label">🐶 Opp</span>
         <span class="stat-value">${oDist}m</span>
       </div>`;
   }
 
   statsHtml += '</div>';
   dom.resultBody.innerHTML = statsHtml;
+
+  // AGS - Submit progress & Refresh Leaderboards
+  console.log('[DEBUG] Game ended. state.loggedIn =', state.loggedIn, '| state.username =', state.username);
+  if (state.loggedIn) {
+    const meters = pDist;
+    const seconds = state.duration - state.timeLeft;
+    // Calculate if player actually "won" the match/round
+    const won = (state.mode === 'single' ? (pDist > cDist) : (pDist > oDist));
+
+    submitRunResult({ meters, seconds, won }).then(() => {
+      // Re-fetch and update leaderboards
+      loadAndRenderLeaderboards().then(() => {
+        // Show result leaderboard
+        if (dom.resultLeaderboard) {
+          dom.resultLeaderboard.style.display = 'block';
+          // We can reuse the same render logic but specifically for the result list using meters
+          fetchLongestRunLeaderboards(5).then(lb => {
+            renderLeaderboard(lb.meters, dom.resultLeaderboardList);
+          });
+        }
+      });
+    });
+  } else {
+    if (dom.resultLeaderboard) dom.resultLeaderboard.style.display = 'none';
+  }
 
   showScreen('result');
 }
@@ -678,6 +732,33 @@ function stopTimers() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// LEADERBOARD RENDERING
+// ═══════════════════════════════════════════════════════════════════════
+
+async function loadAndRenderLeaderboards() {
+  const lb = await fetchLongestRunLeaderboards(10);
+  renderLeaderboard(lb.meters, dom.leaderboardMetersContainer);
+  renderLeaderboard(lb.seconds, dom.leaderboardSecondsContainer);
+}
+
+function renderLeaderboard(data, container) {
+  if (!container) return;
+  container.innerHTML = '';
+  if (!data || data.length === 0) {
+    container.innerHTML = '<p class="leaderboard-empty">No runs yet</p>';
+    return;
+  }
+  const html = data.map((entry, idx) => `
+    <div class="leaderboard-item">
+      <span class="leaderboard-rank">#${idx + 1}</span>
+      <span class="leaderboard-name">${entry.displayName || entry.userEmail || entry.userId || 'Anonymous'}</span>
+      <span class="leaderboard-value">${entry.point || entry.value || 0}</span>
+    </div>
+  `).join('');
+  container.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -699,6 +780,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-sp-60').addEventListener('click', () => startGameCountdown('single', 60));
   document.getElementById('btn-mp-30').addEventListener('click', () => startMatchmaking('multi', 30));
   document.getElementById('btn-mp-60').addEventListener('click', () => startMatchmaking('multi', 60));
+
+  // ── Leaderboard ────────────────────────────────────────────────────
+  document.getElementById('btn-leaderboard').addEventListener('click', async () => {
+    showScreen('leaderboard');
+    await loadAndRenderLeaderboards();
+  });
+  document.getElementById('btn-leaderboard-back').addEventListener('click', () => {
+    showScreen('menu');
+  });
 
   // ── Matchmaking ────────────────────────────────────────────────────
   document.getElementById('btn-mm-cancel').addEventListener('click', cancelMatchmaking);
@@ -726,6 +816,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       e.preventDefault();
       onRunClick();
     }
+  });
+
+  // ── Leaderboard tab switching ──────────────────────────────────────
+  dom.leaderboardTabButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      dom.leaderboardTabButtons.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const board = btn.dataset.board;
+      dom.leaderboardMetersContainer.classList.toggle('active', board === 'meters');
+      dom.leaderboardSecondsContainer.classList.toggle('active', board === 'seconds');
+    });
   });
 
   console.log('[Paws & Panic] Initialized — state available at window._pp');

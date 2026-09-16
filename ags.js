@@ -21,6 +21,9 @@ import { sdk }                          from './auth.js';
 
 import { Lobby }           from '@accelbyte/sdk-lobby';
 import { MatchTicketsApi } from '@accelbyte/sdk-matchmaking';
+import { UserStatisticApi } from '@accelbyte/sdk-social';
+import { LeaderboardDataV3Api } from '@accelbyte/sdk-leaderboard';
+import { UsersApi } from '@accelbyte/sdk-iam';
 
 // ════════════════════════════════════════════════════════════════════════
 // MODULE STATE — kept alive across window.ags* calls
@@ -54,6 +57,8 @@ function wireUpAgs() {
   window.agsFindMatch    = agsFindMatch;
   window.agsCancelMatch  = agsCancelMatch;
   window.agsSendPosition = agsSendPosition;
+  window.submitRunResult = submitRunResult;
+  window.loadLeaderboard = loadLeaderboard;
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -218,12 +223,30 @@ function handleLobbyMessage(msg) {
       if (msg.from !== ags.opponentUserId) break;
       try {
         const payload = JSON.parse(msg.payload);
-        if (typeof payload.distance === 'number') {
-          window.agsOnReceiveOpponentPosition(payload.distance);
+        // Handle both old format (distance) and new format (x, y, panic, etc)
+        if (typeof window.agsOnReceiveOpponentPosition === 'function') {
+          window.agsOnReceiveOpponentPosition({
+            ...payload,
+            playerId: msg.from,
+            timestamp: Date.now()
+          });
         }
       } catch {
         // ignore malformed payloads
       }
+      break;
+    }
+
+    // ── Error notifications (don't break game, just log) ─────────────
+    case 'errorNotif': {
+      console.warn('[AGS] Lobby error:', msg.message || msg);
+      // Don't break the game flow on errors
+      break;
+    }
+
+    // ── Personal chat response (position sync not using this API) ─────
+    case 'personalChatResponse': {
+      // Suppress - not using personalChat for position sync anymore
       break;
     }
 
@@ -294,19 +317,158 @@ async function agsCancelMatch() {
 // 3. REAL-TIME SEND — push position to opponent via personal chat
 // ════════════════════════════════════════════════════════════════════════
 
-function agsSendPosition(distance) {
-  if (!ags.lobbyWs || !ags.opponentUserId || !ags.userInfo) {
+function agsSendPosition(data) {
+  // NOTE: Position sync via personalChat was rejected by AGS (Request rejected error)
+  // Instead, we use demo opponent movement which works locally
+  // For real multiplayer position sync, a dedicated API endpoint or session
+  // attributes should be used instead of personalChat
+  //
+  // This function is kept for API compatibility but doesn't send anything
+  return;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// 4. SUBMIT RUN RESULT — update stats (MAX strategy) after each game
+// ════════════════════════════════════════════════════════════════════════
+
+async function submitRunResult({ meters, seconds, maxPanic, won, mode }) {
+  let userId = ags.userInfo?.userId;
+
+  // Fallback: extract userId from SDK token if not directly set
+  if (!userId) {
+    const token = sdk.getToken();
+    if (token?.accessToken) {
+      try {
+        const payloadBase64 = token.accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(atob(payloadBase64));
+        userId = payload?.sub || payload?.user_id || payload?.userId;
+        if (userId) {
+          if (!ags.userInfo) ags.userInfo = {};
+          ags.userInfo.userId = userId;
+          if (!ags.userInfo.displayName) {
+            ags.userInfo.displayName = payload?.display_name || payload?.displayName || 'Player';
+          }
+        }
+      } catch (e) {
+        console.warn('[AGS] Could not extract userId from JWT:', e);
+      }
+    }
+  }
+
+  if (!userId) {
+    console.warn('[AGS] submitRunResult: no user logged in — skipping');
     return;
   }
 
-  ags.lobbyWs.sendPersonalChat({
-    type:       'personalChatRequest',
-    from:       ags.userInfo.userId,
-    to:         ags.opponentUserId,
-    id:         Date.now().toString(),
-    payload:    JSON.stringify({ distance }),
-    receivedAt: new Date().toISOString(),
-  });
+  console.log('[AGS] submitRunResult — user:', userId, 'meters:', meters, 'seconds:', seconds, 'maxPanic:', maxPanic, 'won:', won, 'mode:', mode);
+
+  const displayName = ags.userInfo?.displayName || ags.userInfo?.username || 'Player';
+  const additionalData = { displayName };
+
+  const updates = [];
+
+  // 1. Distance in meters (MAX strategy — personal best)
+  if (typeof meters === 'number' && meters > 0) {
+    updates.push({
+      statCode:       AGS_CONFIG.stats.longestMeters,
+      updateStrategy: 'MAX',
+      value:          meters,
+      additionalData,
+    });
+  }
+
+  // 2. Survival time in seconds (MAX strategy — personal best)
+  if (typeof seconds === 'number' && seconds > 0) {
+    updates.push({
+      statCode:       AGS_CONFIG.stats.longestSeconds,
+      updateStrategy: 'MAX',
+      value:          seconds,
+      additionalData,
+    });
+  }
+
+  // 3. Lowest Panic reached (MIN strategy — lower peak panic is better)
+  if (typeof maxPanic === 'number' && !isNaN(maxPanic)) {
+    updates.push({
+      statCode:       AGS_CONFIG.stats.lowestPanic,
+      updateStrategy: 'MIN',
+      value:          Math.max(0, Math.min(100, Math.round(maxPanic))),
+      additionalData,
+    });
+  }
+
+  // 4. Win/loss counters (INCREMENT)
+  if (won) {
+    updates.push({ statCode: AGS_CONFIG.stats.totalWins,   updateStrategy: 'INCREMENT', value: 1 });
+  } else {
+    updates.push({ statCode: AGS_CONFIG.stats.totalLosses, updateStrategy: 'INCREMENT', value: 1 });
+  }
+
+  try {
+    await UserStatisticApi(sdk).updateStatitemValueBulk_ByUserId_v2(userId, updates);
+    console.log('[AGS] Stats submitted OK');
+  } catch (err) {
+    // 404 means stat item doesn't exist yet — create it first, then retry
+    if (err?.response?.status === 404 || err?.status === 404) {
+      console.log('[AGS] Stat item not found — creating first…');
+      try {
+        const creates = updates.map(u => ({ statCode: u.statCode }));
+        await UserStatisticApi(sdk).createStatitemBulk_ByUserId(userId, creates);
+        await UserStatisticApi(sdk).updateStatitemValueBulk_ByUserId_v2(userId, updates);
+        console.log('[AGS] Stats created + submitted OK');
+      } catch (e2) {
+        console.warn('[AGS] submitRunResult retry failed:', e2?.message || e2);
+      }
+    } else {
+      console.warn('[AGS] submitRunResult failed:', err?.message || err);
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// 5. LOAD LEADERBOARD — fetch real rankings from AGS
+//    Returns { meters, seconds, panic } each as [{ name, score, userId }]
+// ════════════════════════════════════════════════════════════════════════
+
+async function loadLeaderboard() {
+  const lbApi = LeaderboardDataV3Api(sdk);
+
+  const fetchTab = async (leaderboardCode, limit = 10) => {
+    try {
+      const res = await lbApi.getAlltime_ByLeaderboardCode_v3(leaderboardCode, { limit });
+      const rawEntries = res?.data?.data || [];
+      if (!rawEntries.length) return [];
+
+      return rawEntries.map(entry => {
+        // Read displayName stored in additionalData on stat submission
+        let name = entry.additionalData?.displayName;
+        if (!name) {
+          // If current logged-in user, use active displayName
+          if (entry.userId === ags.userInfo?.userId) {
+            name = ags.userInfo?.displayName || 'You';
+          } else {
+            name = `Runner-${entry.userId?.slice(0, 6) || 'Guest'}`;
+          }
+        }
+        return {
+          userId: entry.userId,
+          score:  entry.point,
+          name:   name,
+        };
+      });
+    } catch (err) {
+      console.warn('[AGS] loadLeaderboard failed for', leaderboardCode, ':', err?.message || err);
+      return null; // null = use fallback dummy data
+    }
+  };
+
+  const [metersData, secondsData, panicData] = await Promise.all([
+    fetchTab(AGS_CONFIG.leaderboards.meters),
+    fetchTab(AGS_CONFIG.leaderboards.seconds),
+    fetchTab(AGS_CONFIG.leaderboards.panic),
+  ]);
+
+  return { meters: metersData, seconds: secondsData, panic: panicData };
 }
 
 // ════════════════════════════════════════════════════════════════════════
