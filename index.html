@@ -99,14 +99,19 @@
             <h1 class="font-display text-5xl md:text-7xl text-rose-500 text-stroke-thick mb-6">PAWS PANIC</h1>
             <p class="text-2xl font-bold text-gray-800 mb-8">Sign in to play</p>
 
+            <!-- --- BEGIN ACCELBYTE DISABLED GOOGLE LOGIN --- -->
             <div class="flex flex-col gap-4">
-                <button onclick="handleGoogleLogin()" class="px-8 py-4 bg-blue-500 hover:bg-blue-600 text-white font-display text-2xl rounded-2xl border-4 border-gray-900 shadow-[4px_4px_0_rgba(0,0,0,1)] transition-transform active:translate-y-1 active:shadow-[0px_0px_0_rgba(0,0,0,1)]">
-                    🌐 Sign in with Google
-                </button>
+                <div title="Google Sign-In coming soon! For now, use Guest login to play.">
+                    <button disabled class="w-full px-8 py-4 bg-gray-400 text-gray-600 font-display text-2xl rounded-2xl border-4 border-gray-900 shadow-[4px_4px_0_rgba(0,0,0,1)] cursor-not-allowed opacity-60 transition-transform">
+                        🌐 Sign in with Google
+                    </button>
+                    <p class="text-xs text-gray-700 mt-2 text-center font-bold">✨ Coming Soon - Google authentication feature will be ready shortly!</p>
+                </div>
                 <button onclick="handleGuestLogin()" class="px-8 py-4 bg-green-500 hover:bg-green-600 text-white font-display text-2xl rounded-2xl border-4 border-gray-900 shadow-[4px_4px_0_rgba(0,0,0,1)] transition-transform active:translate-y-1 active:shadow-[0px_0px_0_rgba(0,0,0,1)]">
                     👤 Play as Guest
                 </button>
             </div>
+            <!-- --- END ACCELBYTE DISABLED GOOGLE LOGIN --- -->
 
             <p id="loginStatus" class="text-gray-800 font-bold mt-4" style="display: none;"></p>
         </div>
@@ -117,7 +122,7 @@
         <div class="bg-amber-100 p-8 rounded-3xl border-8 border-gray-900 max-w-2xl w-full mx-4 shadow-[8px_8px_0_rgba(0,0,0,1)] text-center">
             <h1 class="font-display text-5xl md:text-7xl text-rose-500 text-stroke-thick mb-6">Select Mode</h1>
 
-            <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="grid grid-cols-3 gap-4 mb-6">
                 <div>
                     <p class="text-lg font-bold text-gray-800 mb-2">Single Player</p>
                     <div class="flex flex-col gap-2">
@@ -129,6 +134,16 @@
                         </button>
                     </div>
                 </div>
+                <!-- --- BEGIN ACCELBYTE ENDLESS MODE UI --- -->
+                <div>
+                    <p class="text-lg font-bold text-gray-800 mb-2">Endless</p>
+                    <div class="flex flex-col gap-2">
+                        <button onclick="startEndless()" class="px-6 py-3 bg-red-400 hover:bg-red-300 text-gray-900 font-display text-xl rounded-xl border-3 border-gray-900 shadow-[3px_3px_0_rgba(0,0,0,1)]">
+                            ∞ Survive
+                        </button>
+                    </div>
+                </div>
+                <!-- --- END ACCELBYTE ENDLESS MODE UI --- -->
                 <div>
                     <p class="text-lg font-bold text-gray-800 mb-2">Multiplayer</p>
                     <div class="flex flex-col gap-2">
@@ -142,11 +157,45 @@
                 </div>
             </div>
 
+            <button onclick="showLeaderboard()" class="w-full mb-4 bg-blue-500 text-white font-bold text-xl py-3 px-6 rounded-full border-b-4 border-blue-700 hover:bg-blue-400 hover:translate-y-1 hover:border-b-0 transition-all" style="font-family: 'Fredoka One';">
+                📊 LEADERBOARDS
+            </button>
             <button onclick="handleLogout()" class="px-6 py-2 bg-gray-400 hover:bg-gray-300 text-gray-900 font-bold rounded-lg border-2 border-gray-900">
                 🚪 Logout
             </button>
         </div>
     </div>
+
+    <!-- --- BEGIN ACCELBYTE LEADERBOARD SCREEN --- -->
+    <div id="leaderboardScreen" class="absolute inset-0 bg-black/80 flex items-center justify-center backdrop-blur-sm z-50 pointer-events-auto" style="display: none;">
+        <div class="bg-amber-100 p-8 rounded-3xl border-8 border-gray-900 max-w-2xl w-full mx-4 shadow-[8px_8px_0_rgba(0,0,0,1)]">
+            <h2 class="text-4xl text-center text-white font-black mb-4 drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]" style="font-family: 'Fredoka One'; -webkit-text-stroke: 2px #b45309;">LEADERBOARDS</h2>
+
+            <!-- Category Tabs -->
+            <div class="flex justify-between mb-4 gap-2">
+                <button onclick="changeLeaderboardTab('fastest')" id="tab-fastest" class="flex-1 bg-green-500 text-white font-bold py-2 px-1 rounded-lg border-b-4 border-green-700 hover:bg-green-400 text-sm transition-all">Fastest Escape</button>
+                <button onclick="changeLeaderboardTab('panic')" id="tab-panic" class="flex-1 bg-blue-500 text-white font-bold py-2 px-1 rounded-lg border-b-4 border-blue-700 hover:bg-blue-400 text-sm transition-all">Lowest Panic</button>
+                <button onclick="changeLeaderboardTab('survival')" id="tab-survival" class="flex-1 bg-purple-500 text-white font-bold py-2 px-1 rounded-lg border-b-4 border-purple-700 hover:bg-purple-400 text-sm transition-all">Longest Survival</button>
+            </div>
+
+            <div class="bg-white/90 rounded-xl p-4 overflow-y-auto max-h-64 border-2 border-yellow-700">
+                <table class="w-full text-left font-bold text-gray-800" style="font-family: 'Nunito', sans-serif;">
+                    <thead>
+                        <tr class="border-b-2 border-gray-300">
+                            <th class="pb-2">Rank</th>
+                            <th class="pb-2">Player</th>
+                            <th class="pb-2 text-right" id="leaderboardScoreHeader">Score</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardData">
+                        <!-- Data injected via JS -->
+                    </tbody>
+                </table>
+            </div>
+            <button onclick="closeLeaderboard()" class="mt-6 w-full bg-red-500 text-white font-bold text-xl py-3 px-6 rounded-full border-b-4 border-red-700 hover:bg-red-400 hover:translate-y-1 hover:border-b-0 transition-all" style="font-family: 'Fredoka One';">BACK</button>
+        </div>
+    </div>
+    <!-- --- END ACCELBYTE LEADERBOARD SCREEN --- -->
 
     <!-- MATCHMAKING SCREEN -->
     <div id="matchmakingScreen" class="absolute inset-0 bg-black/80 flex items-center justify-center backdrop-blur-sm z-50 pointer-events-auto" style="display: none;">
@@ -203,16 +252,39 @@
         </div>
     </div>
 
-    <!-- Game Over Screen -->
-    <div id="endScreen" class="absolute inset-0 bg-black/90 flex items-center justify-center z-50 pointer-events-auto" style="display: none;">
-        <div class="text-center">
-            <h1 id="endTitle" class="font-display text-6xl md:text-8xl text-rose-500 text-stroke-thick mb-4">GAME OVER</h1>
-            <p id="endMessage" class="text-2xl md:text-4xl font-bold text-white mb-8 drop-shadow-md"></p>
-            <button onclick="backToMode()" class="px-8 py-4 bg-amber-400 hover:bg-amber-300 text-gray-900 font-display text-2xl md:text-3xl rounded-2xl border-4 border-gray-900 shadow-[4px_4px_0_rgba(0,0,0,1)] transition-transform active:translate-y-1 active:shadow-[0px_0px_0_rgba(0,0,0,1)]">
-                Back to Menu
-            </button>
+    <!-- --- BEGIN ACCELBYTE PAUSE MENU --- -->
+    <!-- Pause Screen -->
+    <div id="pauseScreen" class="absolute inset-0 bg-black/80 flex items-center justify-center backdrop-blur-sm z-50 pointer-events-auto" style="display: none;">
+        <div class="bg-amber-100 p-8 rounded-3xl border-8 border-gray-900 max-w-md w-full mx-4 shadow-[8px_8px_0_rgba(0,0,0,1)] text-center">
+            <h1 class="font-display text-6xl text-rose-500 text-stroke-thick mb-6">⏸ PAUSED</h1>
+            <p class="text-gray-800 font-bold text-lg mb-6">Press <span class="bg-gray-300 px-2 py-1 rounded">ESC</span> or click below to resume</p>
+
+            <div class="flex flex-col gap-3">
+                <button onclick="resumeGame()" class="px-8 py-4 bg-green-500 hover:bg-green-600 text-white font-display text-2xl rounded-2xl border-4 border-gray-900 shadow-[4px_4px_0_rgba(0,0,0,1)] transition-transform active:translate-y-1 active:shadow-[0px_0px_0_rgba(0,0,0,1)]">
+                    ▶ RESUME
+                </button>
+                <button onclick="backToMode()" class="px-8 py-4 bg-red-500 hover:bg-red-600 text-white font-display text-2xl rounded-2xl border-4 border-gray-900 shadow-[4px_4px_0_rgba(0,0,0,1)] transition-transform active:translate-y-1 active:shadow-[0px_0px_0_rgba(0,0,0,1)]">
+                    🚪 Back to Menu
+                </button>
+            </div>
         </div>
     </div>
+    <!-- --- END ACCELBYTE PAUSE MENU --- -->
+
+    <!-- --- BEGIN ACCELBYTE END SCREEN --- -->
+    <div id="endScreen" class="absolute inset-0 bg-black/80 flex items-center justify-center backdrop-blur-sm z-50 pointer-events-auto" style="display: none;">
+        <div class="bg-amber-100 p-8 rounded-3xl border-8 border-gray-900 max-w-2xl w-full mx-4 shadow-[8px_8px_0_rgba(0,0,0,1)] text-center">
+            <h1 id="endTitle" class="font-display text-6xl md:text-8xl text-stroke-thick mb-4"></h1>
+            <p id="endMessage" class="text-2xl md:text-3xl font-bold text-gray-800 mb-8 whitespace-pre-line"></p>
+
+            <div class="flex justify-center gap-4 flex-wrap">
+                <button onclick="backToMode()" class="px-8 py-4 bg-gray-400 hover:bg-gray-300 text-gray-900 font-display text-2xl md:text-3xl rounded-2xl border-4 border-gray-900 shadow-[4px_4px_0_rgba(0,0,0,1)] transition-transform active:translate-y-1 active:shadow-[0px_0px_0_rgba(0,0,0,1)]">
+                    🚪 Back to Menu
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- --- END ACCELBYTE END SCREEN --- -->
 
     <script type="module">
         // ═══════════════════════════════════════════════════════════════════════
@@ -226,6 +298,77 @@
             sdk
         } from './auth.js';
         import { onLoginComplete, onLogoutComplete } from './ags.js';
+
+        // Username state for display in game
+        let currentUsername = "Guest";
+
+        // --- BEGIN ACCELBYTE LEADERBOARD DATA ---
+        const leaderboardDataSets = {
+            fastest: [
+                { name: "CatDodger99", score: "0:14s" },
+                { name: "SpeedyPaws", score: "0:18s" },
+                { name: "NinjaGuest", score: "0:21s" },
+                { name: "RunawayBob", score: "0:25s" },
+                { name: "LaserPointerPro", score: "0:32s" }
+            ],
+            panic: [
+                { name: "IceColdKitten", score: "5%" },
+                { name: "ZenMaster", score: "12%" },
+                { name: "CatDodger99", score: "18%" },
+                { name: "CoolBeans", score: "25%" },
+                { name: "BarelyPanicked", score: "33%" }
+            ],
+            survival: [
+                { name: "EndlessRunner", score: "5m 22s" },
+                { name: "YarnHoarder", score: "4m 10s" },
+                { name: "SurvivorDave", score: "3m 45s" },
+                { name: "CatWhisperer", score: "3m 12s" },
+                { name: "JustKeepRunning", score: "2m 50s" }
+            ]
+        };
+
+        window.showLeaderboard = function() {
+            document.getElementById('modeScreen').style.display = 'none';
+            document.getElementById('leaderboardScreen').style.display = 'flex';
+            changeLeaderboardTab('fastest');
+        };
+
+        window.closeLeaderboard = function() {
+            document.getElementById('leaderboardScreen').style.display = 'none';
+            document.getElementById('modeScreen').style.display = 'flex';
+        };
+
+        window.changeLeaderboardTab = function changeLeaderboardTab(tabId) {
+            ['fastest', 'panic', 'survival'].forEach(id => {
+                const tab = document.getElementById(`tab-${id}`);
+                if (id === tabId) {
+                    tab.classList.add('opacity-100', 'translate-y-1', 'border-b-0');
+                    tab.classList.remove('opacity-70');
+                } else {
+                    tab.classList.remove('opacity-100', 'translate-y-1', 'border-b-0');
+                    tab.classList.add('opacity-70');
+                }
+            });
+
+            const header = document.getElementById('leaderboardScoreHeader');
+            if(tabId === 'fastest') header.innerText = "Time";
+            if(tabId === 'panic') header.innerText = "Max Panic";
+            if(tabId === 'survival') header.innerText = "Time Survived";
+
+            const dataContainer = document.getElementById('leaderboardData');
+            dataContainer.innerHTML = '';
+
+            leaderboardDataSets[tabId].forEach((entry, index) => {
+                let medal = index === 0 ? '🥇 ' : index === 1 ? '🥈 ' : index === 2 ? '🥉 ' : '';
+                dataContainer.innerHTML += `
+                    <tr class="border-b border-gray-200">
+                        <td class="py-2 text-lg">${medal}${index + 1}</td>
+                        <td class="py-2">${entry.name}</td>
+                        <td class="py-2 text-right text-[#b45309]">${entry.score}</td>
+                    </tr>`;
+            });
+        }
+        // --- END ACCELBYTE LEADERBOARD DATA ---
 
         // Setup Canvas
         const canvas = document.getElementById('gameCanvas');
@@ -243,14 +386,20 @@
 
         // Game State
         let gameState = 'login'; // login | mode | matchmaking | countdown | playing | gameOver
-        let currentMode = 'single'; // single | multi
+        let currentMode = 'single'; // single | multi | endless
         let currentDuration = 30; // seconds
         let lastTime = 0;
+        let survivalTimer = 0; // --- BEGIN ACCELBYTE ENDLESS MODE ---
+        let catSpawnTimer = 0; // --- END ACCELBYTE ENDLESS MODE ---
         let timeRemaining = 38;
         let panicLevel = 0;
         let activeInventory = 1;
         let animFrameId = null;
         let isLoggedIn = false;
+
+        // --- BEGIN ACCELBYTE PAUSE STATE ---
+        let isPaused = false;
+        // --- END ACCELBYTE PAUSE STATE ---
 
         // Interaction
         let isMouseDown = false;
@@ -259,7 +408,9 @@
 
         // Entities
         let player = { x: 0, y: 0, radius: 15, speed: 250, color: '#3b82f6', assigned: false };
-        let cat = { x: 0, y: 0, radius: 18, speed: 140, state: 'chasing' };
+        // --- BEGIN ACCELBYTE ENDLESS MODE CATS ARRAY ---
+        let cats = []; // Changed from single cat object to array for endless mode spawning
+        // --- END ACCELBYTE ENDLESS MODE CATS ARRAY ---
         let dog = { x: 0, y: 0, radius: 25, awake: false, wakeupMeter: 0 };
         let obstacles = [];
         let keys = [];
@@ -278,16 +429,21 @@
         // LOGIN HANDLERS
         // ═══════════════════════════════════════════════════════════════════════
 
+        // --- BEGIN ACCELBYTE SAFE GOOGLE LOGIN ---
         window.handleGoogleLogin = async function() {
             try {
-                document.getElementById('loginStatus').textContent = '🔄 Signing in...';
-                document.getElementById('loginStatus').style.display = 'block';
+                const statusEl = document.getElementById('loginStatus');
+                if (statusEl) {
+                    statusEl.textContent = '🔄 Signing in...';
+                    statusEl.style.display = 'block';
+                }
 
                 const userInfo = await loginWithGoogle();
                 console.log('[Game] Login successful:', userInfo);
 
                 isLoggedIn = true;
                 myId = userInfo.userId;
+                currentUsername = userInfo.username || "Guest";
 
                 // Call AGS login hook
                 await onLoginComplete(userInfo);
@@ -295,21 +451,30 @@
                 showModeScreen();
             } catch (err) {
                 console.error('[Game] Login failed:', err);
-                document.getElementById('loginStatus').textContent = '❌ ' + (err.message || 'Login failed');
-                document.getElementById('loginStatus').style.display = 'block';
+                const statusEl = document.getElementById('loginStatus');
+                if (statusEl) {
+                    statusEl.textContent = '❌ ' + (err.message || 'Login failed');
+                    statusEl.style.display = 'block';
+                }
             }
         };
+        // --- END ACCELBYTE SAFE GOOGLE LOGIN ---
 
+        // --- BEGIN ACCELBYTE SAFE GUEST LOGIN ---
         window.handleGuestLogin = async function() {
             try {
-                document.getElementById('loginStatus').textContent = '🔄 Creating guest account...';
-                document.getElementById('loginStatus').style.display = 'block';
+                const statusEl = document.getElementById('loginStatus');
+                if (statusEl) {
+                    statusEl.textContent = '🔄 Creating guest account...';
+                    statusEl.style.display = 'block';
+                }
 
                 const userInfo = await loginWithDeviceId();
                 console.log('[Game] Guest login successful:', userInfo);
 
                 isLoggedIn = true;
                 myId = userInfo.userId;
+                currentUsername = userInfo.username || "Guest";
 
                 // Call AGS login hook
                 await onLoginComplete(userInfo);
@@ -317,16 +482,21 @@
                 showModeScreen();
             } catch (err) {
                 console.error('[Game] Guest login failed:', err);
-                document.getElementById('loginStatus').textContent = '❌ ' + (err.message || 'Login failed');
-                document.getElementById('loginStatus').style.display = 'block';
+                const statusEl = document.getElementById('loginStatus');
+                if (statusEl) {
+                    statusEl.textContent = '❌ ' + (err.message || 'Login failed');
+                    statusEl.style.display = 'block';
+                }
             }
         };
+        // --- END ACCELBYTE SAFE GUEST LOGIN ---
 
         window.handleLogout = async function() {
             try {
                 await authLogout();
                 isLoggedIn = false;
                 myId = null;
+                currentUsername = "Guest";
                 opponentUserId = null;
                 otherPlayers = {};
                 onLogoutComplete();
@@ -340,40 +510,82 @@
         // SCREEN NAVIGATION
         // ═══════════════════════════════════════════════════════════════════════
 
+        // --- BEGIN ACCELBYTE SAFE SCREEN NAVIGATION ---
         function showLoginScreen() {
-            document.getElementById('loginScreen').style.display = 'flex';
-            document.getElementById('modeScreen').style.display = 'none';
-            document.getElementById('matchmakingScreen').style.display = 'none';
-            document.getElementById('overlayScreen').style.display = 'none';
+            const screens = {
+                loginScreen: 'flex',
+                modeScreen: 'none',
+                matchmakingScreen: 'none',
+                overlayScreen: 'none',
+                endScreen: 'none',
+                pauseScreen: 'none',
+                leaderboardScreen: 'none'
+            };
+            for (let [id, display] of Object.entries(screens)) {
+                const el = document.getElementById(id);
+                if (el) el.style.display = display;
+            }
             gameState = 'login';
         }
 
         function showModeScreen() {
             console.log('[Game] showModeScreen() called');
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('modeScreen').style.display = 'flex';
-            document.getElementById('matchmakingScreen').style.display = 'none';
-            document.getElementById('overlayScreen').style.display = 'none';
-            document.getElementById('endScreen').style.display = 'none';
+            const screens = {
+                loginScreen: 'none',
+                modeScreen: 'flex',
+                matchmakingScreen: 'none',
+                overlayScreen: 'none',
+                endScreen: 'none',
+                pauseScreen: 'none',
+                leaderboardScreen: 'none'
+            };
+            for (let [id, display] of Object.entries(screens)) {
+                const el = document.getElementById(id);
+                if (el) el.style.display = display;
+            }
             gameState = 'mode';
             console.log('[Game] Mode screen: all overlays hidden, modeScreen visible, gameState=mode');
         }
+        // --- END ACCELBYTE SAFE SCREEN NAVIGATION ---
 
         window.backToMode = function() {
             console.log('[Game] backToMode() called, current gameState:', gameState);
-            if (gameState === 'playing' || gameState === 'countdown') {
+            if (animFrameId) {
                 console.log('[Game] Cancelling animation frame');
-                if (animFrameId) cancelAnimationFrame(animFrameId);
+                cancelAnimationFrame(animFrameId);
+                animFrameId = null;
             }
+            isPaused = false;
             console.log('[Game] Showing mode screen');
             showModeScreen();
             console.log('[Game] Mode screen shown');
         };
 
+        // --- BEGIN ACCELBYTE PAUSE FUNCTIONS ---
+        window.pauseGame = function() {
+            if (gameState !== 'playing') return;
+            isPaused = true;
+            const pauseScreen = document.getElementById('pauseScreen');
+            if (pauseScreen) pauseScreen.style.display = 'flex';
+            console.log('[Game] Game paused');
+        };
+
+        window.resumeGame = function() {
+            isPaused = false;
+            const pauseScreen = document.getElementById('pauseScreen');
+            if (pauseScreen) pauseScreen.style.display = 'none';
+            lastTime = performance.now();
+            if (animFrameId) cancelAnimationFrame(animFrameId);
+            animFrameId = requestAnimationFrame(gameLoop);
+            console.log('[Game] Game resumed');
+        };
+        // --- END ACCELBYTE PAUSE FUNCTIONS ---
+
         // ═══════════════════════════════════════════════════════════════════════
         // GAME MODE SELECTION
         // ═══════════════════════════════════════════════════════════════════════
 
+        // --- BEGIN ACCELBYTE SAFE START SINGLE PLAYER ---
         window.startSinglePlayer = function(duration) {
             console.log('[Game] startSinglePlayer() called with duration:', duration);
             currentMode = 'single';
@@ -382,11 +594,15 @@
             timeRemaining = duration;
             gameState = 'countdown';
 
-            document.getElementById('modeScreen').style.display = 'none';
-            document.getElementById('overlayScreen').style.display = 'flex';
+            const modeScreen = document.getElementById('modeScreen');
+            const overlayScreen = document.getElementById('overlayScreen');
+            if (modeScreen) modeScreen.style.display = 'none';
+            if (overlayScreen) overlayScreen.style.display = 'flex';
             console.log('[Game] Showing overlay screen, waiting for START GAME click...');
         };
+        // --- END ACCELBYTE SAFE START SINGLE PLAYER ---
 
+        // --- BEGIN ACCELBYTE SAFE START MULTIPLAYER ---
         window.startMultiplayer = async function(duration) {
             currentMode = 'multi';
             currentDuration = duration;
@@ -394,8 +610,10 @@
             timeRemaining = duration;
 
             // Show matchmaking screen
-            document.getElementById('modeScreen').style.display = 'none';
-            document.getElementById('matchmakingScreen').style.display = 'flex';
+            const modeScreen = document.getElementById('modeScreen');
+            const matchmakingScreen = document.getElementById('matchmakingScreen');
+            if (modeScreen) modeScreen.style.display = 'none';
+            if (matchmakingScreen) matchmakingScreen.style.display = 'flex';
             gameState = 'matchmaking';
 
             try {
@@ -416,6 +634,7 @@
                 showModeScreen();
             }
         };
+        // --- END ACCELBYTE SAFE START MULTIPLAYER ---
 
         window.cancelMatchmaking = function() {
             if (typeof window.agsCancelMatch === 'function') {
@@ -423,6 +642,25 @@
             }
             showModeScreen();
         };
+
+        // --- BEGIN ACCELBYTE ENDLESS MODE FUNCTION ---
+        window.startEndless = function() {
+            console.log('[Game] startEndless() called');
+            currentMode = 'endless';
+            currentDuration = 999; // No time limit
+            isMultiplayer = false;
+            survivalTimer = 0;
+            catSpawnTimer = 0;
+            timeRemaining = 999;
+            gameState = 'countdown';
+
+            const modeScreen = document.getElementById('modeScreen');
+            const overlayScreen = document.getElementById('overlayScreen');
+            if (modeScreen) modeScreen.style.display = 'none';
+            if (overlayScreen) overlayScreen.style.display = 'flex';
+            console.log('[Game] Showing overlay screen for endless mode, waiting for START GAME click...');
+        };
+        // --- END ACCELBYTE ENDLESS MODE FUNCTION ---
 
         // AGS Matchmaking Callback - called when match is found
         window._ppStartGame = function(mode, duration) {
@@ -480,28 +718,36 @@
             opponent.lastUpdate = Date.now();
         };
 
+        // --- BEGIN ACCELBYTE SAFE START GAME COUNTDOWN ---
         window.startGameCountdown = function() {
             console.log('[Game] startGameCountdown() called, mode:', currentMode, 'duration:', currentDuration);
 
-            // Hide all overlay screens
-            document.getElementById('matchmakingScreen').style.display = 'none';
-            document.getElementById('overlayScreen').style.display = 'none';
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('modeScreen').style.display = 'none';
+            // Hide all overlay screens - Safe null checks
+            const screens = ['matchmakingScreen', 'overlayScreen', 'loginScreen', 'modeScreen', 'pauseScreen', 'leaderboardScreen'];
+            screens.forEach(screenId => {
+                const el = document.getElementById(screenId);
+                if (el) el.style.display = 'none';
+            });
 
             // Initialize and start the game
             resetGame();
         };
+        // --- END ACCELBYTE SAFE START GAME COUNTDOWN ---
 
         // ═══════════════════════════════════════════════════════════════════════
         // INVENTORY & INPUT
         // ═══════════════════════════════════════════════════════════════════════
 
+        // --- BEGIN ACCELBYTE PAUSE KEY HANDLER ---
         window.addEventListener('keydown', e => {
             keysDown[e.key.toLowerCase()] = true;
             if (e.key === '1') window.setActiveInventory(1);
             if (e.key === '2') window.setActiveInventory(2);
+            if (e.key === 'Escape' && gameState === 'playing') {
+                isPaused ? resumeGame() : pauseGame();
+            }
         });
+        // --- END ACCELBYTE PAUSE KEY HANDLER ---
         window.addEventListener('keyup', e => keysDown[e.key.toLowerCase()] = false);
 
         window.setActiveInventory = function(slot) {
@@ -546,17 +792,44 @@
         // GAME LOGIC
         // ═══════════════════════════════════════════════════════════════════════
 
+        // --- BEGIN ACCELBYTE SPAWN CAT FUNCTION ---
+        function spawnCat(x, y) {
+            cats.push({
+                x: x, y: y, radius: 18, speed: 140 + (cats.length * 10)
+            });
+        }
+        // --- END ACCELBYTE SPAWN CAT FUNCTION ---
+
+        // --- BEGIN ACCELBYTE SAFE RESET GAME ---
         function resetGame() {
             timeRemaining = currentDuration;
             panicLevel = 0;
             gameState = 'playing';
 
-            // Reset UI
-            document.getElementById('endScreen').style.display = 'none';
-            document.getElementById('overlayScreen').style.display = 'none';
-            document.getElementById('objectiveText').innerHTML = `Objective:<br>Collect Keys<br>to Escape`;
-            document.getElementById('panicMeter').style.background = `conic-gradient(#ef4444 0%, transparent 0)`;
-            document.getElementById('vignette').style.opacity = 0;
+            // Reset UI - Safe null checks
+            const endScreen = document.getElementById('endScreen');
+            const overlayScreen = document.getElementById('overlayScreen');
+            const objectiveText = document.getElementById('objectiveText');
+            const panicMeter = document.getElementById('panicMeter');
+            const vignette = document.getElementById('vignette');
+
+            if (endScreen) endScreen.style.display = 'none';
+            if (overlayScreen) overlayScreen.style.display = 'none';
+
+            // --- BEGIN ACCELBYTE ENDLESS MODE OBJECTIVE ---
+            if (objectiveText) {
+                if (currentMode === 'endless') {
+                    objectiveText.innerHTML = `Objective:<br>Survive the Horde!`;
+                    survivalTimer = 0;
+                    catSpawnTimer = 0;
+                } else {
+                    objectiveText.innerHTML = `Objective:<br>Collect Keys<br>to Escape`;
+                }
+            }
+            // --- END ACCELBYTE ENDLESS MODE OBJECTIVE ---
+
+            if (panicMeter) panicMeter.style.background = `conic-gradient(#ef4444 0%, transparent 0)`;
+            if (vignette) vignette.style.opacity = 0;
 
             // Map Layout
             obstacles = [
@@ -573,8 +846,10 @@
                 player.assigned = true;
             }
 
-            cat.x = width * 0.8;
-            cat.y = height * 0.5;
+            // --- BEGIN ACCELBYTE INITIALIZE CATS ARRAY ---
+            cats = [];
+            spawnCat(width * 0.8, height * 0.5);
+            // --- END ACCELBYTE INITIALIZE CATS ARRAY ---
 
             dog.x = width * 0.45;
             dog.y = height * 0.22;
@@ -593,6 +868,7 @@
             if (animFrameId) cancelAnimationFrame(animFrameId);
             animFrameId = requestAnimationFrame(gameLoop);
         }
+        // --- END ACCELBYTE SAFE RESET GAME ---
 
         function checkCollision(x, y, radius) {
             if (x - radius < 0 || x + radius > width || y - radius < 0 || y + radius > height) return true;
@@ -620,10 +896,31 @@
                 }
             }
 
+            // --- BEGIN ACCELBYTE ENDLESS MODE TIMER LOGIC ---
             // Time logic
-            timeRemaining -= dt;
-            if (timeRemaining <= 0) return endGame(false, "Time's up!");
-            document.getElementById('timeDisplay').textContent = `0:${Math.max(0, Math.ceil(timeRemaining)).toString().padStart(2, '0')}`;
+            const timeDisplayEl = document.getElementById('timeDisplay');
+            if (currentMode === 'endless') {
+                survivalTimer += dt;
+                catSpawnTimer += dt;
+
+                // Spawn new cat increasingly often over time (every 15s → down to 4s)
+                let spawnInterval = Math.max(4, 15 - survivalTimer / 60);
+                if (catSpawnTimer >= spawnInterval) {
+                    catSpawnTimer = 0;
+                    let sx = Math.random() > 0.5 ? 50 : width - 50;
+                    let sy = Math.random() > 0.5 ? 50 : height - 50;
+                    spawnCat(sx, sy);
+                }
+
+                let mins = Math.floor(survivalTimer / 60);
+                let secs = Math.floor(survivalTimer % 60).toString().padStart(2, '0');
+                if (timeDisplayEl) timeDisplayEl.textContent = `${mins}:${secs}`;
+            } else {
+                timeRemaining -= dt;
+                if (timeRemaining <= 0) return endGame(false, "Time's up!");
+                if (timeDisplayEl) timeDisplayEl.textContent = `0:${Math.max(0, Math.ceil(timeRemaining)).toString().padStart(2, '0')}`;
+            }
+            // --- END ACCELBYTE ENDLESS MODE TIMER LOGIC ---
 
             // Player movement
             let dx = 0, dy = 0;
@@ -658,7 +955,8 @@
                     if (dist < k.grabRadius + player.radius) {
                         k.collected = true;
                         createParticles(k.x, k.y, '#fef08a', 40);
-                        document.getElementById('objectiveText').innerHTML = `Key Grabbed!<br>Find the <span class="text-green-400">EXIT</span>!`;
+                        const objectiveTextEl = document.getElementById('objectiveText');
+                        if (objectiveTextEl) objectiveTextEl.innerHTML = `Key Grabbed!<br>Find the <span class="text-green-400">EXIT</span>!`;
                         door.open = true;
 
                         // Send position update to opponent
@@ -718,37 +1016,41 @@
                 if (p.life <= 0) particles.splice(i, 1);
             }
 
-            // Cat AI
-            let targetX = player.x, targetY = player.y;
-            let hasDistractor = false;
+            // --- BEGIN ACCELBYTE CAT AI FOR MULTIPLE CATS ---
+            // Cat AI - iterate through all cats in array
+            cats.forEach(cat => {
+                let targetX = player.x, targetY = player.y;
+                let hasDistractor = false;
 
-            if (isMultiplayer) {
-                let closestDist = Math.sqrt((player.x - cat.x)**2 + (player.y - cat.y)**2);
-                for (let id in otherPlayers) {
-                    let p = otherPlayers[id];
-                    let d = Math.sqrt((p.currentX - cat.x)**2 + (p.currentY - cat.y)**2);
-                    if (d < closestDist) { closestDist = d; targetX = p.currentX; targetY = p.currentY; }
+                if (isMultiplayer) {
+                    let closestDist = Math.sqrt((player.x - cat.x)**2 + (player.y - cat.y)**2);
+                    for (let id in otherPlayers) {
+                        let p = otherPlayers[id];
+                        let d = Math.sqrt((p.currentX - cat.x)**2 + (p.currentY - cat.y)**2);
+                        if (d < closestDist) { closestDist = d; targetX = p.currentX; targetY = p.currentY; }
+                    }
                 }
-            }
 
-            if (distractors.length > 0) {
-                let bestDist = Infinity;
-                for (let d of distractors) {
-                    let dist = Math.sqrt((d.x - cat.x)**2 + (d.y - cat.y)**2);
-                    if (dist < bestDist) { bestDist = dist; targetX = d.x; targetY = d.y; hasDistractor = true; }
+                if (distractors.length > 0) {
+                    let bestDist = Infinity;
+                    for (let d of distractors) {
+                        let dist = Math.sqrt((d.x - cat.x)**2 + (d.y - cat.y)**2);
+                        if (dist < bestDist) { bestDist = dist; targetX = d.x; targetY = d.y; hasDistractor = true; }
+                    }
                 }
-            }
 
-            let cdx = targetX - cat.x, cdy = targetY - cat.y;
-            let cDist = Math.sqrt(cdx*cdx + cdy*cdy);
+                let cdx = targetX - cat.x, cdy = targetY - cat.y;
+                let cDist = Math.sqrt(cdx*cdx + cdy*cdy);
 
-            if (cDist > 5) {
-                let speed = hasDistractor ? cat.speed * 2 : cat.speed;
-                let nx = cat.x + (cdx/cDist) * speed * dt;
-                let ny = cat.y + (cdy/cDist) * speed * dt;
-                if (!checkCollision(nx, cat.y, cat.radius)) cat.x = nx;
-                if (!checkCollision(cat.x, ny, cat.radius)) cat.y = ny;
-            }
+                if (cDist > 5) {
+                    let speed = hasDistractor ? cat.speed * 2 : cat.speed;
+                    let nx = cat.x + (cdx/cDist) * speed * dt;
+                    let ny = cat.y + (cdy/cDist) * speed * dt;
+                    if (!checkCollision(nx, cat.y, cat.radius)) cat.x = nx;
+                    if (!checkCollision(cat.x, ny, cat.radius)) cat.y = ny;
+                }
+            });
+            // --- END ACCELBYTE CAT AI FOR MULTIPLE CATS ---
 
             // Dog AI
             if (dog.awake) {
@@ -768,20 +1070,27 @@
                 dog.wakeupMeter = Math.max(0, dog.wakeupMeter - dt * 10);
             }
 
-            // Panic Math
-            let distToMe = Math.sqrt((player.x - cat.x)**2 + (player.y - cat.y)**2);
-            let catTargetingMe = !hasDistractor && (targetX === player.x && targetY === player.y);
+            // --- BEGIN ACCELBYTE PANIC FROM MULTIPLE CATS ---
+            // Panic Math - check all cats
+            let closestCatDist = Infinity;
+            cats.forEach(cat => {
+                let distToMe = Math.sqrt((player.x - cat.x)**2 + (player.y - cat.y)**2);
+                if (distToMe < closestCatDist) closestCatDist = distToMe;
+                if (distToMe < player.radius + cat.radius) panicLevel += 50 * dt;
+            });
 
-            if (catTargetingMe && distToMe < 180) {
-                panicLevel += (180 - distToMe) * 0.7 * dt;
-                if (distToMe < player.radius + cat.radius) panicLevel += 500 * dt;
+            if (closestCatDist < 180) {
+                panicLevel += (180 - closestCatDist) * 0.4 * dt;
             } else {
                 panicLevel = Math.max(0, panicLevel - 20 * dt);
             }
+            // --- END ACCELBYTE PANIC FROM MULTIPLE CATS ---
 
             // Visual Update
-            document.getElementById('panicMeter').style.background = `conic-gradient(#ef4444 ${Math.min(100, panicLevel)}%, transparent 0)`;
-            document.getElementById('vignette').style.opacity = panicLevel > 50 ? (panicLevel - 50) / 100 : 0;
+            const panicMeterEl = document.getElementById('panicMeter');
+            const vignetteEl = document.getElementById('vignette');
+            if (panicMeterEl) panicMeterEl.style.background = `conic-gradient(#ef4444 ${Math.min(100, panicLevel)}%, transparent 0)`;
+            if (vignetteEl) vignetteEl.style.opacity = panicLevel > 50 ? (panicLevel - 50) / 100 : 0;
 
             if (panicLevel >= 100) endGame(false, "You panicked!");
 
@@ -877,13 +1186,25 @@
         function endGame(win, msg) {
             gameState = win ? 'won' : 'lost';
             const endScreen = document.getElementById('endScreen');
-            endScreen.style.display = 'flex';
+            if (endScreen) endScreen.style.display = 'flex';
 
             const titleEl = document.getElementById('endTitle');
-            titleEl.textContent = win ? "VICTORY!" : "GAME OVER";
-            titleEl.className = `font-display text-6xl md:text-8xl text-stroke-thick mb-4 ${win ? 'text-green-400' : 'text-rose-500'}`;
+            if (titleEl) {
+                titleEl.textContent = win ? "VICTORY!" : "GAME OVER";
+                titleEl.className = `font-display text-6xl md:text-8xl text-stroke-thick mb-4 ${win ? 'text-green-400' : 'text-rose-500'}`;
+            }
 
-            document.getElementById('endMessage').textContent = msg;
+            // --- BEGIN ACCELBYTE ENDLESS MODE END MESSAGE ---
+            let endMsg = msg;
+            if (currentMode === 'endless' && !win) {
+                let mins = Math.floor(survivalTimer / 60);
+                let secs = Math.floor(survivalTimer % 60).toString().padStart(2, '0');
+                endMsg += `\nSurvived: ${mins}:${secs}\nCats Spawned: ${cats.length}`;
+            }
+            // --- END ACCELBYTE ENDLESS MODE END MESSAGE ---
+
+            const endMessageEl = document.getElementById('endMessage');
+            if (endMessageEl) endMessageEl.textContent = endMsg;
 
             // Submit stats to AGS if available
             if (typeof window.submitRunResult === 'function') {
@@ -1029,26 +1350,62 @@
             ctx.fill();
             ctx.shadowBlur = 0;
 
-            // Cat
-            ctx.fillStyle = '#f97316';
-            ctx.beginPath(); ctx.arc(cat.x, cat.y, cat.radius, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.moveTo(cat.x - 12, cat.y - 12); ctx.lineTo(cat.x - 18, cat.y - 28); ctx.lineTo(cat.x, cat.y - 18); ctx.fill();
-            ctx.beginPath(); ctx.moveTo(cat.x + 12, cat.y - 12); ctx.lineTo(cat.x + 18, cat.y - 28); ctx.lineTo(cat.x, cat.y - 18); ctx.fill();
+            // --- BEGIN ACCELBYTE DRAW USERNAME ---
+            // Floating Username Above Player
             ctx.fillStyle = 'white';
-            ctx.beginPath(); ctx.arc(cat.x - 6, cat.y - 5, 4, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.arc(cat.x + 6, cat.y - 5, 4, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = 'black';
-            ctx.beginPath(); ctx.arc(cat.x - 6, cat.y - 5, 2, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.arc(cat.x + 6, cat.y - 5, 2, 0, Math.PI*2); ctx.fill();
+            ctx.font = 'bold 14px Nunito, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = 'black';
+            ctx.shadowBlur = 4;
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = 'black';
+            ctx.strokeText(currentUsername, player.x, player.y - player.radius - 8);
+            ctx.fillText(currentUsername, player.x, player.y - player.radius - 8);
+            ctx.shadowBlur = 0;
+            ctx.textAlign = 'left';
+
+            // Username follows cursor
+            if (gameState === 'playing' && isMouseDown) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.font = 'bold 12px Nunito, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.shadowColor = 'black';
+                ctx.shadowBlur = 3;
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = 'black';
+                ctx.strokeText(currentUsername, mouseX + 10, mouseY - 10);
+                ctx.fillText(currentUsername, mouseX + 10, mouseY - 10);
+                ctx.shadowBlur = 0;
+            }
+            // --- END ACCELBYTE DRAW USERNAME ---
+
+            // --- BEGIN ACCELBYTE DRAW MULTIPLE CATS ---
+            // Cats
+            cats.forEach(cat => {
+                ctx.fillStyle = '#f97316';
+                ctx.beginPath(); ctx.arc(cat.x, cat.y, cat.radius, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(cat.x - 12, cat.y - 12); ctx.lineTo(cat.x - 18, cat.y - 28); ctx.lineTo(cat.x, cat.y - 18); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(cat.x + 12, cat.y - 12); ctx.lineTo(cat.x + 18, cat.y - 28); ctx.lineTo(cat.x, cat.y - 18); ctx.fill();
+                ctx.fillStyle = 'white';
+                ctx.beginPath(); ctx.arc(cat.x - 6, cat.y - 5, 4, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(cat.x + 6, cat.y - 5, 4, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = 'black';
+                ctx.beginPath(); ctx.arc(cat.x - 6, cat.y - 5, 2, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(cat.x + 6, cat.y - 5, 2, 0, Math.PI*2); ctx.fill();
+            });
+            // --- END ACCELBYTE DRAW MULTIPLE CATS ---
         }
 
+        // --- BEGIN ACCELBYTE PAUSE SUPPORT IN GAMELOOP ---
         function gameLoop(time) {
             if (!lastTime) lastTime = time;
             let dt = (time - lastTime) / 1000;
             lastTime = time;
             if (dt > 0.1) dt = 0.1;
 
-            update(dt);
+            if (!isPaused) {
+                update(dt);
+            }
             draw();
 
             if (gameState === 'playing') {
@@ -1057,6 +1414,7 @@
                 draw(); // Draw one final frame for non-playing states
             }
         }
+        // --- END ACCELBYTE PAUSE SUPPORT IN GAMELOOP ---
 
         // Initialize
         console.log('[Game] Initializing...');
