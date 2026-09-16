@@ -23,6 +23,7 @@ import { Lobby }           from '@accelbyte/sdk-lobby';
 import { MatchTicketsApi } from '@accelbyte/sdk-matchmaking';
 import { UserStatisticApi } from '@accelbyte/sdk-social';
 import { LeaderboardDataV3Api } from '@accelbyte/sdk-leaderboard';
+import { UsersApi } from '@accelbyte/sdk-iam';
 
 // ════════════════════════════════════════════════════════════════════════
 // MODULE STATE — kept alive across window.ags* calls
@@ -331,13 +332,35 @@ function agsSendPosition(data) {
 // ════════════════════════════════════════════════════════════════════════
 
 async function submitRunResult({ meters, seconds, won, mode }) {
-  if (!ags.userInfo?.userId) {
+  let userId = ags.userInfo?.userId;
+
+  // Fallback: extract userId from SDK token if not directly set
+  if (!userId) {
+    const token = sdk.getToken();
+    if (token?.accessToken) {
+      try {
+        const payloadBase64 = token.accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(atob(payloadBase64));
+        userId = payload?.sub || payload?.user_id || payload?.userId;
+        if (userId) {
+          if (!ags.userInfo) ags.userInfo = {};
+          ags.userInfo.userId = userId;
+          if (!ags.userInfo.displayName) {
+            ags.userInfo.displayName = payload?.display_name || payload?.displayName || 'Player';
+          }
+        }
+      } catch (e) {
+        console.warn('[AGS] Could not extract userId from JWT:', e);
+      }
+    }
+  }
+
+  if (!userId) {
     console.warn('[AGS] submitRunResult: no user logged in — skipping');
     return;
   }
 
-  const userId = ags.userInfo.userId;
-  console.log('[AGS] submitRunResult — meters:', meters, 'seconds:', seconds, 'won:', won, 'mode:', mode);
+  console.log('[AGS] submitRunResult — user:', userId, 'meters:', meters, 'seconds:', seconds, 'won:', won, 'mode:', mode);
 
   const updates = [];
 
@@ -369,7 +392,7 @@ async function submitRunResult({ meters, seconds, won, mode }) {
     console.log('[AGS] Stats submitted OK');
   } catch (err) {
     // 404 means stat item doesn't exist yet — create it first, then retry
-    if (err?.response?.status === 404) {
+    if (err?.response?.status === 404 || err?.status === 404) {
       console.log('[AGS] Stat item not found — creating first…');
       try {
         const creates = updates.map(u => ({ statCode: u.statCode }));
@@ -396,10 +419,32 @@ async function loadLeaderboard() {
   const fetchTab = async (leaderboardCode, limit = 10) => {
     try {
       const res = await lbApi.getAlltime_ByLeaderboardCode_v3(leaderboardCode, { limit });
-      return (res?.data?.data || []).map(entry => ({
+      const rawEntries = res?.data?.data || [];
+      if (!rawEntries.length) return [];
+
+      // Bulk fetch user profiles for display names
+      const userIds = [...new Set(rawEntries.map(e => e.userId).filter(Boolean))];
+      const nameMap = {};
+      if (userIds.length > 0) {
+        try {
+          const usersApi = UsersApi(sdk);
+          const bulkRes = await usersApi.createUserBulkBasic_v3({ userIds }).catch(() => null);
+          const userList = bulkRes?.data?.data || [];
+          userList.forEach(u => {
+            const name = u?.displayName || u?.userName || u?.uniqueDisplayName;
+            if (u?.userId && name) {
+              nameMap[u.userId] = name;
+            }
+          });
+        } catch (e) {
+          console.warn('[AGS] Failed to bulk fetch profile names:', e);
+        }
+      }
+
+      return rawEntries.map(entry => ({
         userId: entry.userId,
         score:  entry.point,
-        name:   entry.additionalData?.displayName || entry.userId?.slice(0, 8) || 'Player',
+        name:   nameMap[entry.userId] || entry.additionalData?.displayName || entry.userId?.slice(0, 8) || 'Player',
       }));
     } catch (err) {
       console.warn('[AGS] loadLeaderboard failed for', leaderboardCode, ':', err?.message || err);

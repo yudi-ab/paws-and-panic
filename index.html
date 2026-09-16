@@ -295,6 +295,11 @@
             loginWithGoogle,
             loginWithDeviceId,
             logout as authLogout,
+            hasStoredSession,
+            refreshSession,
+            handleCallback,
+            exchangeGoogleIdToken,
+            getProfile,
             sdk
         } from './auth.js';
         import { onLoginComplete, onLogoutComplete } from './ags.js';
@@ -499,12 +504,32 @@
                     statusEl.style.display = 'block';
                 }
 
-                const userInfo = await loginWithDeviceId();
-                console.log('[Game] Guest login successful:', userInfo);
+                const loginResult = await loginWithDeviceId();
+                console.log('[Game] Guest login result:', loginResult);
+
+                if (!loginResult?.ok) {
+                    throw new Error(loginResult?.error || 'Guest login failed');
+                }
+
+                const tokenData = loginResult.data;
+                // Extract userId from token response
+                let userId = tokenData?.user_id || tokenData?.sub || tokenData?.userId;
+                if (!userId && tokenData?.access_token) {
+                  try {
+                    const payload = JSON.parse(atob(tokenData.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+                    userId = payload?.sub || payload?.user_id || payload?.userId;
+                  } catch (e) { /* ignore */ }
+                }
+
+                const userInfo = {
+                  userId: userId || 'guest-' + Date.now().toString().slice(-4),
+                  displayName: tokenData?.display_name || 'Guest',
+                  username: tokenData?.display_name || 'Guest',
+                };
 
                 isLoggedIn = true;
                 myId = userInfo.userId;
-                currentUsername = userInfo.username || "Guest";
+                currentUsername = userInfo.displayName;
 
                 // Call AGS login hook
                 await onLoginComplete(userInfo);
@@ -1457,6 +1482,57 @@
         console.log('[Game] Initializing...');
         gameState = 'login';
         showLoginScreen();
+
+        // Check for active session or OAuth callback
+        async function initAuth() {
+            try {
+                // 1. Check for OAuth callback code
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('code') || urlParams.get('error')) {
+                    const res = await handleCallback();
+                    if (res?.ok && res.data) {
+                        const tokenData = res.data;
+                        let userId = tokenData?.user_id || tokenData?.sub || tokenData?.userId;
+                        let displayName = tokenData?.display_name || 'Player';
+                        const profile = await getProfile();
+                        if (profile?.displayName || profile?.userName) {
+                            displayName = profile.displayName || profile.userName;
+                        }
+                        const userInfo = { userId, displayName, username: displayName };
+                        isLoggedIn = true;
+                        myId = userId;
+                        currentUsername = displayName;
+                        await onLoginComplete(userInfo);
+                        showModeScreen();
+                        return;
+                    }
+                }
+
+                // 2. Check for stored session
+                if (hasStoredSession()) {
+                    const res = await refreshSession();
+                    if (res?.ok && res.data) {
+                        const tokenData = res.data;
+                        let userId = tokenData?.user_id || tokenData?.sub || tokenData?.userId;
+                        let displayName = tokenData?.display_name || 'Player';
+                        const profile = await getProfile();
+                        if (profile?.displayName || profile?.userName) {
+                            displayName = profile.displayName || profile.userName;
+                        }
+                        const userInfo = { userId, displayName, username: displayName };
+                        isLoggedIn = true;
+                        myId = userId;
+                        currentUsername = displayName;
+                        await onLoginComplete(userInfo);
+                        showModeScreen();
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('[Game] initAuth error:', e);
+            }
+        }
+        initAuth();
 
         // Draw initial canvas
         ctx.fillStyle = '#e7bc91';
