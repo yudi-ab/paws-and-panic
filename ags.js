@@ -21,6 +21,8 @@ import { sdk }                          from './auth.js';
 
 import { Lobby }           from '@accelbyte/sdk-lobby';
 import { MatchTicketsApi } from '@accelbyte/sdk-matchmaking';
+import { UserStatisticApi } from '@accelbyte/sdk-social';
+import { LeaderboardDataV3Api } from '@accelbyte/sdk-leaderboard';
 
 // ════════════════════════════════════════════════════════════════════════
 // MODULE STATE — kept alive across window.ags* calls
@@ -54,6 +56,8 @@ function wireUpAgs() {
   window.agsFindMatch    = agsFindMatch;
   window.agsCancelMatch  = agsCancelMatch;
   window.agsSendPosition = agsSendPosition;
+  window.submitRunResult = submitRunResult;
+  window.loadLeaderboard = loadLeaderboard;
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -320,6 +324,95 @@ function agsSendPosition(data) {
   //
   // This function is kept for API compatibility but doesn't send anything
   return;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// 4. SUBMIT RUN RESULT — update stats (MAX strategy) after each game
+// ════════════════════════════════════════════════════════════════════════
+
+async function submitRunResult({ meters, seconds, won, mode }) {
+  if (!ags.userInfo?.userId) {
+    console.warn('[AGS] submitRunResult: no user logged in — skipping');
+    return;
+  }
+
+  const userId = ags.userInfo.userId;
+  console.log('[AGS] submitRunResult — meters:', meters, 'seconds:', seconds, 'won:', won, 'mode:', mode);
+
+  const updates = [];
+
+  // Always update meters (MAX — only improves when player beats their best)
+  updates.push({
+    statCode:       AGS_CONFIG.stats.longestMeters,
+    updateStrategy: 'MAX',
+    value:          meters,
+  });
+
+  // Survival time (endless mode only)
+  if (mode === 'endless') {
+    updates.push({
+      statCode:       AGS_CONFIG.stats.longestSeconds,
+      updateStrategy: 'MAX',
+      value:          seconds,
+    });
+  }
+
+  // Win/loss counters
+  if (won) {
+    updates.push({ statCode: AGS_CONFIG.stats.totalWins,   updateStrategy: 'INCREMENT', value: 1 });
+  } else {
+    updates.push({ statCode: AGS_CONFIG.stats.totalLosses, updateStrategy: 'INCREMENT', value: 1 });
+  }
+
+  try {
+    await UserStatisticApi(sdk).updateStatitemValueBulk_ByUserId_v2(userId, updates);
+    console.log('[AGS] Stats submitted OK');
+  } catch (err) {
+    // 404 means stat item doesn't exist yet — create it first, then retry
+    if (err?.response?.status === 404) {
+      console.log('[AGS] Stat item not found — creating first…');
+      try {
+        const creates = updates.map(u => ({ statCode: u.statCode }));
+        await UserStatisticApi(sdk).createStatitemBulk_ByUserId(userId, creates);
+        await UserStatisticApi(sdk).updateStatitemValueBulk_ByUserId_v2(userId, updates);
+        console.log('[AGS] Stats created + submitted OK');
+      } catch (e2) {
+        console.warn('[AGS] submitRunResult retry failed:', e2?.message || e2);
+      }
+    } else {
+      console.warn('[AGS] submitRunResult failed:', err?.message || err);
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// 5. LOAD LEADERBOARD — fetch real rankings from AGS
+//    Returns { fastest, survival } each as [{ name, score, userId }]
+// ════════════════════════════════════════════════════════════════════════
+
+async function loadLeaderboard() {
+  const lbApi = LeaderboardDataV3Api(sdk);
+
+  const fetchTab = async (leaderboardCode, limit = 10) => {
+    try {
+      const res = await lbApi.getAlltime_ByLeaderboardCode_v3(leaderboardCode, { limit });
+      return (res?.data?.data || []).map(entry => ({
+        userId: entry.userId,
+        score:  entry.point,
+        name:   entry.additionalData?.displayName || entry.userId?.slice(0, 8) || 'Player',
+      }));
+    } catch (err) {
+      console.warn('[AGS] loadLeaderboard failed for', leaderboardCode, ':', err?.message || err);
+      return null; // null = use fallback dummy data
+    }
+  };
+
+  const [metersData, secondsData] = await Promise.all([
+    fetchTab(AGS_CONFIG.leaderboards.meters),
+    fetchTab(AGS_CONFIG.leaderboards.seconds),
+  ]);
+
+  return { meters: metersData, seconds: secondsData };
 }
 
 // ════════════════════════════════════════════════════════════════════════

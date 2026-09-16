@@ -327,10 +327,39 @@
             ]
         };
 
-        window.showLeaderboard = function() {
+        window.showLeaderboard = async function() {
             document.getElementById('modeScreen').style.display = 'none';
             document.getElementById('leaderboardScreen').style.display = 'flex';
             changeLeaderboardTab('fastest');
+
+            // --- BEGIN ACCELBYTE LOAD REAL LEADERBOARD ---
+            if (typeof window.loadLeaderboard === 'function') {
+                // Show loading state in table
+                const dataContainer = document.getElementById('leaderboardData');
+                if (dataContainer) dataContainer.innerHTML = '<tr><td colspan="3" class="py-4 text-center text-gray-500">Loading...</td></tr>';
+
+                try {
+                    const real = await window.loadLeaderboard();
+                    if (real?.meters && real.meters.length > 0) {
+                        // Map real AGS data into leaderboardDataSets
+                        leaderboardDataSets.fastest = real.meters.map(e => ({
+                            name:  e.name,
+                            score: `${e.score}m`,
+                        }));
+                    }
+                    if (real?.seconds && real.seconds.length > 0) {
+                        leaderboardDataSets.survival = real.seconds.map(e => {
+                            let mins = Math.floor(e.score / 60);
+                            let secs = Math.floor(e.score % 60).toString().padStart(2, '0');
+                            return { name: e.name, score: `${mins}m ${secs}s` };
+                        });
+                    }
+                } catch (e) {
+                    console.warn('[Leaderboard] Failed to load real data, using dummy:', e);
+                }
+                changeLeaderboardTab('fastest'); // re-render with real data
+            }
+            // --- END ACCELBYTE LOAD REAL LEADERBOARD ---
         };
 
         window.closeLeaderboard = function() {
@@ -391,6 +420,7 @@
         let lastTime = 0;
         let survivalTimer = 0; // --- BEGIN ACCELBYTE ENDLESS MODE ---
         let catSpawnTimer = 0; // --- END ACCELBYTE ENDLESS MODE ---
+        let totalDistancePx = 0; // --- ACCELBYTE: cumulative player movement in pixels ---
         let timeRemaining = 38;
         let panicLevel = 0;
         let activeInventory = 1;
@@ -841,6 +871,7 @@
 
             player.x = width * 0.2;
             player.y = height * 0.4;
+            totalDistancePx = 0; // --- ACCELBYTE: reset distance tracker on new game ---
             if (isMultiplayer && !player.assigned) {
                 player.color = colors[Math.floor(Math.random() * colors.length)];
                 player.assigned = true;
@@ -936,6 +967,9 @@
 
                 if (!checkCollision(nx, player.y, player.radius)) player.x = nx;
                 if (!checkCollision(player.x, ny, player.radius)) player.y = ny;
+
+                // Accumulate real movement distance (pixels)
+                totalDistancePx += player.speed * dt;
 
                 // Dog Wakeup
                 let distToDog = Math.sqrt((player.x - dog.x)**2 + (player.y - dog.y)**2);
@@ -1208,9 +1242,12 @@
 
             // Submit stats to AGS if available
             if (typeof window.submitRunResult === 'function') {
-                const distance = 100; // Simplified - would calculate actual distance
-                const time = currentDuration - Math.ceil(timeRemaining);
-                window.submitRunResult({ meters: distance, seconds: time, won: win });
+                // Convert pixels → meters (250px/s speed, ~1m per 30px = ~8.3 units/s)
+                const meters = Math.round(totalDistancePx / 30);
+                const seconds = currentMode === 'endless'
+                    ? Math.ceil(survivalTimer)
+                    : Math.max(1, currentDuration - Math.ceil(timeRemaining));
+                window.submitRunResult({ meters, seconds, won: win, mode: currentMode });
             }
         }
 
