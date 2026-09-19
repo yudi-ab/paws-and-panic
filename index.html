@@ -529,12 +529,21 @@
                   } catch (e) { /* ignore */ }
                 }
 
+                // Fetch real display name from AGS profile — token may not include it
+                let displayName = tokenData?.display_name || null;
+                if (!displayName) {
+                  try {
+                    const profile = await getProfile();
+                    displayName = profile?.displayName || profile?.userName || null;
+                  } catch (e) { /* ignore, fall back below */ }
+                }
+                displayName = displayName || 'Guest';
+
                 const userInfo = {
                   userId: userId || 'guest-' + Date.now().toString().slice(-4),
-                  displayName: tokenData?.display_name || 'Guest',
-                  username: tokenData?.display_name || 'Guest',
+                  displayName,
+                  username: displayName,
                 };
-
                 isLoggedIn = true;
                 myId = userInfo.userId;
                 currentUsername = userInfo.displayName;
