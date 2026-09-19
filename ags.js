@@ -408,16 +408,20 @@ async function submitRunResult({ meters, seconds, maxPanic, won, mode }) {
     await UserStatisticApi(sdk).updateStatitemValueBulk_ByUserId_v2(userId, updates);
     console.log('[AGS] Stats submitted OK');
   } catch (err) {
-    // 404 means stat item doesn't exist yet — create it first, then retry
-    if (err?.response?.status === 404 || err?.status === 404) {
-      console.log('[AGS] Stat item not found — creating first…');
+    const status = err?.response?.status || err?.status;
+    const code   = err?.response?.data?.errorCode || err?.errorCode;
+    // 404 = stat item missing, 403/20003 = stat item not created in AGS admin
+    if (status === 404 || status === 403 || code === 20003) {
+      console.log('[AGS] Stat item not found — attempting to create first…');
       try {
         const creates = updates.map(u => ({ statCode: u.statCode }));
-        await UserStatisticApi(sdk).createStatitemBulk_ByUserId(userId, creates);
+        const createResult = await UserStatisticApi(sdk).createStatitemBulk_ByUserId(userId, creates);
+        console.log('[AGS] Stat items created:', createResult);
         await UserStatisticApi(sdk).updateStatitemValueBulk_ByUserId_v2(userId, updates);
         console.log('[AGS] Stats created + submitted OK');
       } catch (e2) {
         console.warn('[AGS] submitRunResult retry failed:', e2?.message || e2);
+        // Continue even if stat submission fails - don't crash the game
       }
     } else {
       console.warn('[AGS] submitRunResult failed:', err?.message || err);
