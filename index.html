@@ -534,7 +534,7 @@
                 if (!displayName) {
                   try {
                     const profile = await getProfile();
-                    displayName = profile?.displayName || profile?.userName || null;
+                    displayName = profile?.uniqueDisplayName || profile?.displayName || profile?.userName || null;
                   } catch (e) { /* ignore, fall back below */ }
                 }
                 displayName = displayName || 'Guest';
@@ -1524,11 +1524,9 @@
                     if (res?.ok && res.data) {
                         const tokenData = res.data;
                         let userId = tokenData?.user_id || tokenData?.sub || tokenData?.userId;
-                        let displayName = tokenData?.display_name || 'Player';
+                        let displayName = tokenData?.display_name || null;
                         const profile = await getProfile();
-                        if (profile?.displayName || profile?.userName) {
-                            displayName = profile.displayName || profile.userName;
-                        }
+                        displayName = profile?.uniqueDisplayName || profile?.displayName || profile?.userName || displayName || 'Guest';
                         const userInfo = { userId, displayName, username: displayName };
                         isLoggedIn = true;
                         myId = userId;
@@ -1545,11 +1543,9 @@
                     if (res?.ok && res.data) {
                         const tokenData = res.data;
                         let userId = tokenData?.user_id || tokenData?.sub || tokenData?.userId;
-                        let displayName = tokenData?.display_name || 'Player';
+                        let displayName = tokenData?.display_name || null;
                         const profile = await getProfile();
-                        if (profile?.displayName || profile?.userName) {
-                            displayName = profile.displayName || profile.userName;
-                        }
+                        displayName = profile?.uniqueDisplayName || profile?.displayName || profile?.userName || displayName || 'Guest';
                         const userInfo = { userId, displayName, username: displayName };
                         isLoggedIn = true;
                         myId = userId;
