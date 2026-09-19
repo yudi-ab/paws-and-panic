@@ -163,6 +163,7 @@
             <button onclick="handleLogout()" class="px-6 py-2 bg-gray-400 hover:bg-gray-300 text-gray-900 font-bold rounded-lg border-2 border-gray-900">
                 🚪 Logout
             </button>
+            <p class="text-xs text-gray-500 font-bold mt-3 tracking-wide" id="app-version"></p>
         </div>
     </div>
 
@@ -606,6 +607,9 @@
                 if (el) el.style.display = display;
             }
             gameState = 'mode';
+            // Inject version badge
+            const versionEl = document.getElementById('app-version');
+            if (versionEl) versionEl.textContent = `v${__APP_VERSION__}`;
             console.log('[Game] Mode screen: all overlays hidden, modeScreen visible, gameState=mode');
         }
         // --- END ACCELBYTE SAFE SCREEN NAVIGATION ---

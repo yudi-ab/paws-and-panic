@@ -1,4 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
+import { readFileSync } from 'fs';
+
+const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 
 // Vite config for Paws & Panic.
 // Env vars prefixed with VITE_ are exposed to the client via import.meta.env.
@@ -34,6 +37,9 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       sourcemap: true,
+    },
+    define: {
+      __APP_VERSION__: JSON.stringify(pkg.version),
     },
   };
 });
