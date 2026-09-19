@@ -142,6 +142,8 @@ function handleLobbyMessage(msg) {
       if (msg.status === 'done') {
         if (ags.currentSession) break;   // already handled by OnMatchFound
         ags.currentSession = msg.matchId;
+        clearTimeout(ags.mmTimeoutId);
+        ags.mmTimeoutId = null;
 
         if (Array.isArray(msg.counterPartyMember) && msg.counterPartyMember.length) {
           ags.opponentUserId = msg.counterPartyMember[0];
@@ -155,6 +157,8 @@ function handleLobbyMessage(msg) {
         }
 
       } else if (msg.status === 'timeout') {
+        clearTimeout(ags.mmTimeoutId);
+        ags.mmTimeoutId = null;
         console.warn('[AGS] Matchmaking timed out');
         if (window._pp?.screen === 'matchmaking') {
           if (typeof window.showScreen === 'function') window.showScreen('menu');
@@ -284,6 +288,22 @@ async function agsFindMatch(duration) {
     const ticketId = ticketResult.data?.matchTicketID;
     ags.pendingTicketId = ticketId;
     console.log('[AGS] Matchmaking ticket submitted — id:', ticketId, 'pool:', pool);
+
+    // ── Client-side 60s timeout ───────────────────────────────────────────
+    // AGS should send a 'timeout' status via WebSocket, but as a safety net
+    // we force-cancel the ticket and return to menu after 60 seconds.
+    clearTimeout(ags.mmTimeoutId);
+    ags.mmTimeoutId = setTimeout(async () => {
+      if (!ags.pendingTicketId) return; // already matched or cancelled
+      console.warn('[AGS] Matchmaking client-side timeout (60s) — cancelling ticket');
+      await agsCancelMatch();
+      if (window._pp?.screen === 'matchmaking') {
+        if (typeof window.showScreen === 'function') window.showScreen('menu');
+        const el = document.getElementById('menu-login-status');
+        if (el) el.textContent = 'No match found — please try again';
+      }
+    }, 60_000);
+
     return ticketId;
 
   } catch (err) {
@@ -297,6 +317,8 @@ async function agsFindMatch(duration) {
 // ════════════════════════════════════════════════════════════════════════
 
 async function agsCancelMatch() {
+  clearTimeout(ags.mmTimeoutId);
+  ags.mmTimeoutId = null;
   const ticketId = ags.pendingTicketId;
   if (!ticketId) {
     console.warn('[AGS] agsCancelMatch() — no pending ticket to cancel');
